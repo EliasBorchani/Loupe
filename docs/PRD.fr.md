@@ -5,7 +5,8 @@
 > Doc de travail en français. Le repo public (README, docs, profils) sera en anglais — traduction au M4.
 > Repo personnel, licence **MIT**, public dès le départ.
 >
-> **État : M0 terminé** — voir [`m0-perf-spike.md`](m0-perf-spike.md). Prochain jalon : M1 (cœur).
+> **État : M0 et M1 terminés** — voir [`m0-perf-spike.md`](m0-perf-spike.md) et
+> [`m1-core.md`](m1-core.md). Prochain jalon : M2 (UI).
 
 ---
 
@@ -228,7 +229,7 @@ Chiffres complets, protocole et pièges de mesure : [`m0-perf-spike.md`](m0-perf
 | Jalon | Contenu | Sortie vérifiable |
 |---|---|---|
 | ~~**M0 — Spike perf**~~ **✅ fait** | Indexation colonnaire + mmap + regex sur un log Withings synthétique de 1 Gio | **Toutes les cibles tenues, sur un corpus 1,8× plus gros que la référence du §8.** Harnais maison plutôt que JMH (une passe de plusieurs secondes est du `SingleShotTime`, où JMH ajoute du cérémonial sans ajouter de signal) → [`m0-perf-spike.md`](m0-perf-spike.md) |
-| **M1 — Cœur** | Chargement de profil TOML, indexation, facettes, parseur de requête | `core/` testé (JUnit 5 + MockK), profil `withings` validé sur de vrais fichiers |
+| ~~**M1 — Cœur**~~ **✅ fait** | Chargement de profil TOML, indexation, facettes, parseur de requête | **56 tests. Généricité complète pour +6 % (411 ns/entrée contre 386 au M0).** Le pré-filtre est désormais dérivé du profil → [`m1-core.md`](m1-core.md) |
 | **M2 — UI utilisable** | Fenêtre, ouverture de dossier, liste virtualisée, sidebar de facettes, barre de requête | Le scénario §2 déroulé de bout en bout sur un vrai bundle |
 | **M3 — Produit** | Timeline, panneau détail, export, thèmes, raccourcis, santé du parse | `.dmg` installable, utilisé par l'équipe Android |
 | **M4 — Public** | README anglais, doc du format de profil, 5 profils livrés, CI, licence, notarisation | Repo GitHub publié |
