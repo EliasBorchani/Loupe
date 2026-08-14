@@ -17,20 +17,22 @@ object QueryLexer {
                 character == '"' || character == '\'' -> {
                     val closing: Int = query.indexOf(character, index + 1)
                     val end: Int = if (closing < 0) query.length else closing
-                    tokens.add(QueryToken.Phrase(query.substring(index + 1, end)))
-                    index = if (closing < 0) query.length else closing + 1
+                    val after: Int = if (closing < 0) query.length else closing + 1
+                    tokens.add(QueryToken.Phrase(query.substring(index + 1, end), index, after))
+                    index = after
                 }
 
                 character == '/' -> {
                     val closing: Int = findRegexEnd(query, index)
                     val end: Int = if (closing < 0) query.length else closing
-                    tokens.add(QueryToken.RegexLiteral(query.substring(index + 1, end)))
-                    index = if (closing < 0) query.length else closing + 1
+                    val after: Int = if (closing < 0) query.length else closing + 1
+                    tokens.add(QueryToken.RegexLiteral(query.substring(index + 1, end), index, after))
+                    index = after
                 }
 
                 else -> {
                     val end: Int = findBareEnd(query, index)
-                    tokens.add(parseBare(query.substring(index, end)))
+                    tokens.add(parseBare(query.substring(index, end), index, end))
                     index = end
                 }
             }
@@ -68,12 +70,12 @@ object QueryLexer {
         return query.length
     }
 
-    private fun parseBare(raw: String): QueryToken {
+    private fun parseBare(raw: String, start: Int, end: Int): QueryToken {
         val negated: Boolean = raw.startsWith("-") && raw.length > 1
         val body: String = if (negated) raw.substring(1) else raw
 
         val separator: Int = findFieldSeparator(body)
-        if (separator < 0) return QueryToken.Phrase(body)
+        if (separator < 0) return QueryToken.Phrase(body, start, end)
 
         val field: String = body.substring(0, separator)
         val (comparison: Comparison, valueStart: Int) = readComparison(body, separator)
@@ -82,6 +84,8 @@ object QueryLexer {
             comparison = comparison,
             rawValue = body.substring(valueStart),
             negated = negated,
+            start = start,
+            end = end,
         )
     }
 
@@ -109,7 +113,18 @@ object QueryLexer {
     }
 }
 
+/**
+ * Every token carries its span in the original string. The query bar highlights by it, and a facet
+ * click splices by it — editing the text the user can see, rather than regenerating a query from a
+ * parallel model that would drift from what they typed.
+ */
 sealed interface QueryToken {
+
+    /** Offset of the token's first character in the query. */
+    val start: Int
+
+    /** Offset one past the token's last character. */
+    val end: Int
 
     /** `level>=W`, `cat:Sync,Wpp`, `-tag:~Aggregate`, `since:-2h`. */
     data class Field(
@@ -117,13 +132,20 @@ sealed interface QueryToken {
         val comparison: Comparison,
         val rawValue: String,
         val negated: Boolean,
-    ) : QueryToken
+        override val start: Int,
+        override val end: Int,
+    ) : QueryToken {
+        /** `a,b` split and trimmed; quotes around a value are stripped. */
+        fun values(): List<String> = rawValue.split(',')
+            .map { value -> value.trim().trim('"', '\'') }
+            .filter { value -> value.isNotEmpty() }
+    }
 
     /** Free text — quoted or not. Matched case-insensitively against the whole entry. */
-    data class Phrase(val text: String) : QueryToken
+    data class Phrase(val text: String, override val start: Int, override val end: Int) : QueryToken
 
     /** `/…/`. */
-    data class RegexLiteral(val source: String) : QueryToken
+    data class RegexLiteral(val source: String, override val start: Int, override val end: Int) : QueryToken
 }
 
 enum class Comparison { Equals, AtLeast, AtMost, GreaterThan, LessThan }

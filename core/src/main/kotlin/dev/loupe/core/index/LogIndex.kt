@@ -94,12 +94,24 @@ class LogIndex(
     fun dictionaryOf(name: String): ValueDictionary? =
         facetIndexOf(name).takeIf { index -> index >= 0 }?.let { index -> facetDictionaries[index] }
 
-    /** Density per time bucket, per severity — the data behind the brushable timeline strip. */
-    fun timelineHistogram(bucketCount: Int): Array<IntArray> {
+    /** Density per time bucket, per severity, over every entry. */
+    fun timelineHistogram(bucketCount: Int): Array<IntArray> =
+        timelineHistogram(bucketCount, entries = null, entryCount = entryCount)
+
+    /**
+     * Density per time bucket, per severity — the data behind the brushable timeline strip.
+     *
+     * Buckets always span the **whole** file, even when [entries] is a filtered subset: the strip
+     * is a map of where you are, so it must not rescale under you every time a facet is ticked.
+     *
+     * @param entries indices to count, or `null` for all of them.
+     */
+    fun timelineHistogram(bucketCount: Int, entries: IntArray?, entryCount: Int): Array<IntArray> {
         val buckets: Array<IntArray> = Array(maxOf(profile.levelCount, 1)) { IntArray(bucketCount) }
         val span: Long = maxTimestampMillis - minTimestampMillis
         if (span <= 0L) return buckets
-        for (entry in 0 until entryCount) {
+        for (position in 0 until entryCount) {
+            val entry: Int = entries?.get(position) ?: position
             val levelOrdinal: Int = levels[entry].toInt()
             if (levelOrdinal < 0) continue
             val bucket: Int = (((timestamps[entry] - minTimestampMillis) * bucketCount) / span)

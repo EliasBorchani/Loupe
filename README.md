@@ -3,8 +3,8 @@
 **A structured log viewer for macOS. The Datadog experience — facets, counts, a brushable
 timeline — on a local file, with no server.**
 
-> **Status: pre-alpha.** The performance core is built and measured; there is no UI yet.
-> See [the roadmap](#roadmap).
+> **Status: pre-alpha, but it runs.** Open a folder of logs and you get facets, a query bar, a
+> brushable timeline and a detail pane. See [the roadmap](#roadmap) for what is missing.
 
 Your app already writes structured logs — a timestamp, a level, a category, a tag. Every tool then
 throws that structure away and hands you back a wall of text to `grep`. Loupe reads it, counts it,
@@ -14,8 +14,9 @@ and turns it into filters:
 level>=W cat:Sync since:-2h "timeout"
 ```
 
-Formats are described by **declarative profiles** you can commit next to your code, so a whole team
-shares one viewer that understands their logs.
+Ticking a facet writes into the query bar rather than into a hidden selection model, so the syntax
+is learned by using it. Formats are described by **declarative profiles** you can commit next to
+your code, so a whole team shares one viewer that understands their logs.
 
 ```toml
 [entry]
@@ -52,13 +53,16 @@ Measured on a 1 GiB file — **9 013 588 entries, 11 066 525 lines** — on an A
 
 Every field comes from the profile — nothing about any format is compiled in. Method, caveats and
 the numbers that did *not* meet target on the first attempt:
-[`docs/m0-perf-spike.md`](docs/m0-perf-spike.md) and [`docs/m1-core.md`](docs/m1-core.md) (in French).
+[`docs/m0-perf-spike.md`](docs/m0-perf-spike.md), [`docs/m1-core.md`](docs/m1-core.md) and
+[`docs/m2-ui.md`](docs/m2-ui.md) (in French).
 
 ## Building
 
 ```bash
-./gradlew :core:test                  # 56 tests, incl. golden cases for a real log format
-./gradlew :spike:run --args="1g A"    # generate a 1 GiB fixture and benchmark the indexer
+./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
+./gradlew test                           # 86 tests
+./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
+./gradlew :desktop:packageDmg            # unsigned .dmg
 ```
 
 Requires JDK 17+. No other setup.
@@ -69,8 +73,8 @@ Requires JDK 17+. No other setup.
 |---|---|---|
 | **M0** | Performance spike — columnar index, parser strategies, benchmarks | ✅ done |
 | **M1** | Core — TOML profiles, format auto-detection, query language | ✅ done |
-| **M2** | UI — Compose Multiplatform window, virtualised list, facet sidebar, query bar | next |
-| **M3** | Product — timeline, detail pane, export, themes, shortcuts |  |
+| **M2** | UI — Compose Multiplatform window, virtualised list, facets, query bar, timeline | ✅ done |
+| **M3** | Product — multi-select and copy, keyboard shortcuts, export, unfiltered context | next |
 | **M4** | Public — English docs, bundled profiles, CI, notarised `.dmg` |  |
 
 Full product spec (in French): [`docs/PRD.fr.md`](docs/PRD.fr.md).
