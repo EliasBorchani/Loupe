@@ -100,6 +100,7 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
 
     val dropTarget = remember {
         object : DragAndDropTarget {
+            /** A drop replaces what is open, as in any document app; "+ add…" is the other half. */
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 val dropped: List<File> = filesFrom(event) ?: return false
                 if (dropped.isEmpty()) return false
@@ -120,7 +121,7 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
             status is OpenStatus.Working -> Opening(status as OpenStatus.Working)
             current == null -> Welcome(
                 failure = (status as? OpenStatus.Failed)?.message,
-                onOpen = { chooseAndOpen(state) },
+                onOpen = { chooseAndOpen(state, add = false) },
             )
             else -> Loaded(
                 state = state,
@@ -150,7 +151,11 @@ private fun Loaded(
     val catchingUp: Boolean = state.isCatchingUp(results)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        SourceHeader(source = source, onOpen = { chooseAndOpen(state) })
+        SourceHeader(
+            source = source,
+            onOpen = { chooseAndOpen(state, add = false) },
+            onAdd = { chooseAndOpen(state, add = true) },
+        )
         Divider()
 
         QueryBar(
@@ -284,18 +289,19 @@ private fun Opening(status: OpenStatus.Working) {
     }
 }
 
-private fun chooseAndOpen(state: LoupeState) {
+private fun chooseAndOpen(state: LoupeState, add: Boolean) {
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     val chooser = JFileChooser().apply {
         // Day files are named `2026-06-02` with no extension, and a folder of them is the normal
         // case — so both must be selectable, and nothing may filter on a suffix.
         fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
         isMultiSelectionEnabled = true
-        dialogTitle = "Open a log file or folder"
+        dialogTitle = if (add) "Add log files to the view" else "Open a log file or folder"
     }
     if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return
     val chosen: List<File> = chooser.selectedFiles.toList().ifEmpty { listOfNotNull(chooser.selectedFile) }
-    if (chosen.isNotEmpty()) state.open(chosen)
+    if (chosen.isEmpty()) return
+    if (add) state.add(chosen) else state.open(chosen)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

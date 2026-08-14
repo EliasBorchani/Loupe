@@ -52,9 +52,13 @@ class Results(
     val matchCount: Int,
     val problems: List<String>,
     val counts: SidebarCounts,
-    val histogram: Array<IntArray>,
+    /** The brushed range, or `null` on each side that is unbounded. Drawn as a band, not applied. */
+    val windowSinceMillis: Long?,
+    val windowUntilMillis: Long?,
     val elapsedMillis: Long,
-)
+) {
+    val histogram: Array<IntArray> get() = counts.timeline
+}
 
 /**
  * The screen's state, and the only place that decides what runs off the UI thread.
@@ -133,6 +137,19 @@ class LoupeState(private val scope: CoroutineScope) {
         }
     }
 
+    /**
+     * Re-opens with [paths] **added** to what is already open.
+     *
+     * A drop or the open dialog replaces, the way every document app does. This is the other half:
+     * once the model is "a set of files viewed as one stream", adding yesterday's archive to
+     * today's folder has to be expressible, and the `file` facet is already there to separate them
+     * again afterwards.
+     */
+    fun add(paths: List<File>) {
+        val existing: List<File> = _source.value?.files.orEmpty()
+        open(existing + paths.filterNot { path -> path in existing })
+    }
+
     fun setQuery(query: String) {
         _query.value = query
         _selectedEntry.value = null
@@ -198,8 +215,9 @@ class LoupeState(private val scope: CoroutineScope) {
             matches = destination,
             matchCount = matchCount,
             problems = compiled.problems,
-            counts = FacetCounts.all(index, filter, source.text),
-            histogram = index.timelineHistogram(TIMELINE_BUCKETS, destination, matchCount),
+            counts = FacetCounts.all(index, filter, source.text, TIMELINE_BUCKETS),
+            windowSinceMillis = filter.sinceMillis.takeIf { bound -> bound != Long.MIN_VALUE },
+            windowUntilMillis = filter.untilMillis.takeIf { bound -> bound != Long.MAX_VALUE },
             elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000,
         )
     }

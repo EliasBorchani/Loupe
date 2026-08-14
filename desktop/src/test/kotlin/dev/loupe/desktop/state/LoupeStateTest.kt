@@ -146,6 +146,72 @@ class LoupeStateTest {
     }
 
     @Test
+    fun `the timeline keeps its shape when a range is brushed`() = runBlocking {
+        // Given — the whole file's density.
+        val source: LogSource = openFolder()
+        val unbounded: Results = awaitResults("")
+        val totalBars: Int = unbounded.histogram.sumOf { level -> level.sum() }
+
+        // When — brush the two earliest entries.
+        state.setTimeWindow(source.index.minTimestampMillis, source.index.timestamps[1])
+        val brushed: Results = awaitResults(state.query.value)
+
+        // Then — the list narrows, but the strip still draws every entry: it is a map of where you
+        // are, and emptying it would show the answer where the question belongs.
+        assertEquals(2, brushed.matchCount)
+        assertEquals(totalBars, brushed.histogram.sumOf { level -> level.sum() })
+        assertEquals(source.index.minTimestampMillis, brushed.windowSinceMillis)
+    }
+
+    @Test
+    fun `a facet still narrows the timeline, unlike the time window`() = runBlocking {
+        // Given — only the time window is lifted for the strip; every other term still applies.
+        openFolder()
+
+        // When
+        state.setQuery("category:Wpp")
+        val results: Results = awaitResults("category:Wpp")
+
+        // Then
+        assertEquals(2, results.histogram.sumOf { level -> level.sum() })
+    }
+
+    @Test
+    fun `add merges into what is open, instead of replacing it`() = runBlocking {
+        // Given — one file open.
+        state.open(listOf(File(folder, "2026-07-21")))
+        withTimeout(TIMEOUT_MILLIS) { state.source.first { source -> source != null } }
+        assertEquals(3, requireNotNull(state.source.value).index.entryCount)
+
+        // When
+        state.add(listOf(File(folder, "2026-07-22")))
+        val merged: LogSource = withTimeout(TIMEOUT_MILLIS) {
+            requireNotNull(state.source.first { source -> source != null && source.files.size == 2 })
+        }
+
+        // Then
+        assertEquals(6, merged.index.entryCount)
+        assertEquals(listOf("2026-07-21", "2026-07-22"), merged.files.map { file -> file.name })
+    }
+
+    @Test
+    fun `adding a file already open changes nothing`() = runBlocking {
+        // Given
+        val source: LogSource = openFolder()
+        val before: Int = source.index.entryCount
+
+        // When
+        state.add(listOf(File(folder, "2026-07-21")))
+        val after: LogSource = withTimeout(TIMEOUT_MILLIS) {
+            requireNotNull(state.source.first { candidate -> candidate != null && candidate !== source })
+        }
+
+        // Then
+        assertEquals(before, after.index.entryCount)
+        assertEquals(2, after.files.size)
+    }
+
+    @Test
     fun `a typo is reported and the rest of the query still narrows`() = runBlocking {
         // Given
         openFolder()

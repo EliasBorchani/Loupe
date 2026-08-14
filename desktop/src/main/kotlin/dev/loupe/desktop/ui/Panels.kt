@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -352,8 +352,12 @@ private fun FacetRow(
  * Density over time, brushable.
  *
  * A filter, not a decoration: dragging writes `since:` / `until:` into the query, so the bar always
- * explains the picture. Buckets span the whole file even when the query has narrowed it, because a
- * map that rescales under you is not a map.
+ * explains the picture. Clicking anywhere clears the range.
+ *
+ * The bars are drawn **with the time window lifted** — the strip shows the whole file's shape, and
+ * the selection is marked on top of it with a tinted band and two divider lines. Emptying the bars
+ * outside the range instead would show the answer where the question belongs, and take away the
+ * context that makes brushing worth doing.
  */
 @Composable
 fun TimelineStrip(
@@ -366,6 +370,7 @@ fun TimelineStrip(
     val index: LogIndex = source.index
     val zone: ZoneId = remember { ZoneId.systemDefault() }
     val levelCount: Int = maxOf(index.profile.levelCount, 1)
+    val span: Long = index.maxTimestampMillis - index.minTimestampMillis
 
     var dragStart by remember { mutableStateOf<Float?>(null) }
     var dragEnd by remember { mutableStateOf<Float?>(null) }
@@ -376,6 +381,9 @@ fun TimelineStrip(
                 .fillMaxWidth()
                 .height(44.dp)
                 .padding(horizontal = Spacing.medium, vertical = Spacing.small)
+                .pointerInput(source) {
+                    detectTapGestures { onBrush(null, null) }
+                }
                 .pointerInput(source) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -388,17 +396,15 @@ fun TimelineStrip(
                             dragStart = null
                             dragEnd = null
                             if (from == null || to == null) return@detectDragGestures
-                            // A stray click clears the window rather than selecting a millisecond.
                             if (kotlin.math.abs(to - from) < MINIMUM_BRUSH_PIXELS) {
                                 onBrush(null, null)
                                 return@detectDragGestures
                             }
-                            val span: Long = index.maxTimestampMillis - index.minTimestampMillis
-                            val low: Float = minOf(from, to) / size.width
-                            val high: Float = maxOf(from, to) / size.width
+                            val low: Float = (minOf(from, to) / size.width).coerceIn(0f, 1f)
+                            val high: Float = (maxOf(from, to) / size.width).coerceIn(0f, 1f)
                             onBrush(
-                                index.minTimestampMillis + (low.coerceIn(0f, 1f) * span).toLong(),
-                                index.minTimestampMillis + (high.coerceIn(0f, 1f) * span).toLong(),
+                                index.minTimestampMillis + (low * span).toLong(),
+                                index.minTimestampMillis + (high * span).toLong(),
                             )
                         },
                         onDragCancel = {
@@ -409,6 +415,31 @@ fun TimelineStrip(
                     )
                 },
         ) {
+            // The band goes down first so the bars stay legible on top of it.
+            val live: ClosedFloatingPointRange<Float>? = dragStart?.let { from ->
+                dragEnd?.let { to -> minOf(from, to)..maxOf(from, to) }
+            }
+            val settled: ClosedFloatingPointRange<Float>? = when {
+                live != null -> null
+                span <= 0L -> null
+                results.windowSinceMillis == null && results.windowUntilMillis == null -> null
+                else -> {
+                    val from: Long = results.windowSinceMillis ?: index.minTimestampMillis
+                    val to: Long = results.windowUntilMillis ?: index.maxTimestampMillis
+                    val low: Float = ((from - index.minTimestampMillis).toDouble() / span).toFloat().coerceIn(0f, 1f)
+                    val high: Float = ((to - index.minTimestampMillis).toDouble() / span).toFloat().coerceIn(0f, 1f)
+                    (low * size.width)..(high * size.width)
+                }
+            }
+            val band: ClosedFloatingPointRange<Float>? = live ?: settled
+            if (band != null) {
+                drawRect(
+                    color = colors.accent.copy(alpha = 0.13f),
+                    topLeft = Offset(band.start, 0f),
+                    size = Size(band.endInclusive - band.start, size.height),
+                )
+            }
+
             val buckets: Array<IntArray> = results.histogram
             val bucketCount: Int = buckets.firstOrNull()?.size ?: return@Canvas
             val peak: Int = (0 until bucketCount).maxOf { bucket ->
@@ -431,14 +462,15 @@ fun TimelineStrip(
                 }
             }
 
-            val from: Float? = dragStart
-            val to: Float? = dragEnd
-            if (from != null && to != null) {
-                drawRect(
-                    color = colors.accent.copy(alpha = 0.18f),
-                    topLeft = Offset(minOf(from, to), 0f),
-                    size = Size(kotlin.math.abs(to - from), size.height),
-                )
+            // Dividers last, so the edges of the selection stay readable over a dense bar.
+            if (band != null) {
+                listOf(band.start, band.endInclusive).forEach { edge ->
+                    drawRect(
+                        color = colors.accent,
+                        topLeft = Offset(edge - 0.75f, 0f),
+                        size = Size(1.5f, size.height),
+                    )
+                }
             }
         }
         Row(
@@ -450,7 +482,11 @@ fun TimelineStrip(
             )
             Spacer(Modifier.weight(1f))
             BasicText(
-                text = "drag to bound",
+                text = if (results.windowSinceMillis != null || results.windowUntilMillis != null) {
+                    "click to clear"
+                } else {
+                    "drag to bound"
+                },
                 style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
             )
             Spacer(Modifier.weight(1f))
@@ -495,7 +531,9 @@ fun DetailPane(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 220.dp)
+            // A definite height, not a maximum: the scrollable body below needs something to fill,
+            // and a pane that resizes with each entry makes the list jump under the pointer.
+            .height(208.dp)
             .background(colors.surface)
             .padding(horizontal = Spacing.medium, vertical = Spacing.small),
     ) {
@@ -535,6 +573,7 @@ fun DetailPane(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .clip(RoundedCornerShape(6.dp))
                 .background(colors.sunken)
                 .border(1.dp, colors.border, RoundedCornerShape(6.dp))
@@ -635,7 +674,12 @@ private fun ViewModeToggle(mode: ViewMode, onChange: (ViewMode) -> Unit) {
 // ─── Chrome ──────────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun SourceHeader(source: LogSource, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun SourceHeader(
+    source: LogSource,
+    onOpen: () -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LoupeTheme.colors
     Row(
         modifier = modifier
@@ -673,6 +717,13 @@ fun SourceHeader(source: LogSource, onOpen: () -> Unit, modifier: Modifier = Mod
             text = "open…",
             style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
             modifier = Modifier.clickable(onClick = onOpen),
+        )
+        // Dropping or opening replaces, the way every document app does. Adding is the other half
+        // of "a set of files viewed as one stream", and it needs to be visible to exist.
+        BasicText(
+            text = "+ add…",
+            style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
+            modifier = Modifier.clickable(onClick = onAdd),
         )
     }
 }

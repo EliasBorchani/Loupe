@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -76,7 +77,7 @@ fun LogList(
         }
 
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            items(results.matchCount) { position ->
+            items(count = results.matchCount, key = { position -> results.matches[position] }) { position ->
                 val entry: Int = results.matches[position]
                 val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(index, source.text, entry) }
                 val ordinal: Int = index.levels[entry].toInt()
@@ -130,9 +131,11 @@ fun LogList(
             }
         }
 
+        // fillMaxHeight, never fillMaxSize: a scrollbar stretched over the full width sits on top
+        // of every row and swallows the clicks and drags meant for them.
         VerticalScrollbar(
             adapter = rememberScrollbarAdapter(listState),
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxSize(),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
         )
     }
 }

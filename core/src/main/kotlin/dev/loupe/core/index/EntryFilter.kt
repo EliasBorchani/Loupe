@@ -101,6 +101,89 @@ class EntryFilter(
         return writeCursor
     }
 
+    /**
+     * Does one entry pass?
+     *
+     * Public so a counting pass can run without materialising a match array — the sidebar counts
+     * three facets per query, and three nine-million-int scratch buffers per keystroke is a lot of
+     * garbage for a number.
+     *
+     * Predicates are ordered by cost: level and time are an array read, facets are an array read
+     * behind an indirection, substring search touches the file, and a regex has to decode the entry
+     * first.
+     */
+    fun accepts(index: LogIndex, text: TextSources?, entry: Int): Boolean {
+        if (acceptedLevels != null) {
+            val levelOrdinal: Int = index.levels[entry].toInt()
+            if (levelOrdinal < 0) {
+                if (!acceptUnknownLevel) return false
+            } else if (levelOrdinal >= acceptedLevels.size || !acceptedLevels[levelOrdinal]) {
+                return false
+            }
+        }
+
+        val timestamp: Long = index.timestamps[entry]
+        if (timestamp < sinceMillis || timestamp > untilMillis) return false
+
+        if (facetConstraints != null && !facetsAccept(index, entry)) return false
+
+        if (substringLowercase != null && text != null &&
+            !text.containsIgnoreCase(
+                index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry], substringLowercase,
+            )
+        ) {
+            return false
+        }
+
+        if (regex != null && text != null &&
+            !regex.matcher(text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]))
+                .find()
+        ) {
+            return false
+        }
+
+        return true
+    }
+
+    /** @return the same filter with [facetIndex]'s constraint dropped. */
+    fun withoutFacet(facetIndex: Int): EntryFilter {
+        val constraints: Array<FacetConstraint?> = facetConstraints ?: return this
+        if (facetIndex >= constraints.size || constraints[facetIndex] == null) return this
+        val relaxed: Array<FacetConstraint?> = constraints.copyOf()
+        relaxed[facetIndex] = null
+        return copyWith(facetConstraints = relaxed)
+    }
+
+    fun withoutLevels(): EntryFilter =
+        if (acceptedLevels == null) this else copyWith(acceptedLevels = null, acceptUnknownLevel = true)
+
+    /**
+     * Drops `since` / `until`.
+     *
+     * The timeline draws with this: a strip whose bars empty out where you have just brushed shows
+     * you the answer instead of the question, and loses the context that made brushing useful.
+     */
+    fun withoutTimeWindow(): EntryFilter =
+        if (!hasTimeWindow) this else copyWith(sinceMillis = Long.MIN_VALUE, untilMillis = Long.MAX_VALUE)
+
+    val hasTimeWindow: Boolean get() = sinceMillis != Long.MIN_VALUE || untilMillis != Long.MAX_VALUE
+
+    private fun copyWith(
+        acceptedLevels: BooleanArray? = this.acceptedLevels,
+        acceptUnknownLevel: Boolean = this.acceptUnknownLevel,
+        facetConstraints: Array<FacetConstraint?>? = this.facetConstraints,
+        sinceMillis: Long = this.sinceMillis,
+        untilMillis: Long = this.untilMillis,
+    ): EntryFilter = EntryFilter(
+        acceptedLevels = acceptedLevels,
+        acceptUnknownLevel = acceptUnknownLevel,
+        facetConstraints = facetConstraints,
+        sinceMillis = sinceMillis,
+        untilMillis = untilMillis,
+        substringLowercase = substringLowercase,
+        regex = regex,
+    )
+
     /** The one hot loop. Everything above is scheduling. */
     private fun evaluateRange(
         index: LogIndex,
@@ -112,35 +195,7 @@ class EntryFilter(
     ): Int {
         var matched = 0
         for (entry in fromEntry until toEntry) {
-            if (acceptedLevels != null) {
-                val levelOrdinal: Int = index.levels[entry].toInt()
-                if (levelOrdinal < 0) {
-                    if (!acceptUnknownLevel) continue
-                } else if (levelOrdinal >= acceptedLevels.size || !acceptedLevels[levelOrdinal]) {
-                    continue
-                }
-            }
-
-            val timestamp: Long = index.timestamps[entry]
-            if (timestamp < sinceMillis || timestamp > untilMillis) continue
-
-            if (facetConstraints != null && !facetsAccept(index, entry)) continue
-
-            if (substringLowercase != null && text != null &&
-                !text.containsIgnoreCase(
-                    index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry], substringLowercase,
-                )
-            ) {
-                continue
-            }
-
-            if (regex != null && text != null &&
-                !regex.matcher(text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]))
-                    .find()
-            ) {
-                continue
-            }
-
+            if (!accepts(index, text, entry)) continue
             destination[destinationOffset + matched] = entry
             matched++
         }
