@@ -1,0 +1,10 @@
+.gradle/
+build/
+*.log
+.idea/
+*.iml
+.DS_Store
+local.properties
+
+# Spike fixtures — regenerated on demand, up to a few GiB.
+/spike/fixtures/
