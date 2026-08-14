@@ -1,0 +1,79 @@
+#  Withings HealthMate (Android) — FileLogger
+#
+#  Reference implementation of the profile format. Loading is implemented in M1; until then this
+#  file is the spec, and `core/src/main/kotlin/dev/loupe/core/parse/` hard-codes the same rules.
+#
+#  Produced by `FileLogger.LineFormat.render`:
+#      yyyy-MM-dd HH:mm:ss.SSS [L] [Category]? [tag] -> message
+
+name        = "withings-healthmate"
+description = "Withings HealthMate Android — FileLogger"
+priority    = 50
+
+[detect]
+# Day files are named `2026-06-02` with no extension at all, so the name is a strong signal.
+filename  = '''^\d{4}-\d{2}-\d{2}$'''
+sample    = 200   # lines tested when scoring this profile against a file
+min_match = 0.80  # below this ratio the profile is not considered a match
+
+[entry]
+# An entry is not a line: a multi-line message and a stack trace are re-indented by
+# `timestamp.length` = 23 spaces, and belong to the entry above them.
+opens                     = '''^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \['''
+continues                 = '''^ {23}'''
+strip_continuation_indent = true
+
+[parse]
+# Applied to the OPENING LINE only; continuation lines are appended to `message` after their
+# indent is stripped. One match per entry rather than per line — measured at M0 as the single
+# biggest lever on the indexing budget, since 18.6 % of lines are continuations.
+#
+# `[^\]]*` cannot cross a `]`, so the first ` -> ` always wins:
+#     "… [ComputeAggregateForDay] -> [a1b2c3d4] steps: 100 -> 250"   parses correctly.
+# The optional category group resolves itself by backtracking:
+#     "[E] [ERROR] -> …"  →  category = null, tag = ERROR   (which is where report() puts it)
+regex = '''^(?<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?<level>[VDIWE])\] (?:\[(?<category>[^\]]*)\] )?\[(?<tag>[^\]]*)\] -> (?<message>.*)$'''
+
+[fields.ts]
+role   = "timestamp"
+format = "yyyy-MM-dd HH:mm:ss.SSS"
+zone   = "local"   # FileLogger writes the device's local time, with no offset in the line
+
+[fields.level]
+role   = "level"
+order  = ["V", "D", "I", "W", "E"]   # declaration order is severity order — enables `level>=W`
+labels = { V = "Verbose", D = "Debug", I = "Info", W = "Warn", E = "Error" }
+colors = { W = "warning", E = "error" }
+
+[fields.category]
+role  = "facet"
+label = "Category"
+# Not needed to disambiguate the optional group — the regex handles that. Kept because it orders
+# the facet and flags a malformed line whose category is not one the app can emit.
+values = [
+  "AggregateComputation", "Analytics", "Billing", "BleNetwork", "BodyBalance",
+  "Database", "Datastore", "HealthConnect", "MeasurementPlan", "Measurements",
+  "Migration", "Network", "Other", "Push", "SleepTrackComputation", "Sync",
+  "Tls", "Ui", "Unknown", "Vo2Max", "Wpp", "Zendesk",
+]
+
+[fields.tag]
+role  = "facet"
+label = "Tag"
+# In release builds the tag is an R8-obfuscated FQCN ("ou1"), so this facet has a very high
+# cardinality — the sidebar must render it as top-N plus a search box, never as a flat list.
+facet = "auto"
+# Surfaces report() / reportOrCrash(), which put their marker in the tag slot rather than a level.
+derive = { field = "kind", map = { ERROR = "Reported", CRASH = "Crash" } }
+
+[fields.message]
+role = "message"
+
+# Lines that are not entries: kept and classified, never silently counted as log.
+[[markers]]
+regex = '''^=== (?<source>.+) ===$'''
+role  = "section"   # multi-day export separator → becomes the `source` facet
+
+[[markers]]
+regex = '''^--- older lines dropped.*---$'''
+role  = "notice"
