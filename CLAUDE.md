@@ -1,0 +1,177 @@
+# Loupe — a structured log viewer for macOS
+
+Kotlin/JVM + Compose Multiplatform. Reads a log file (or a folder of them), recognises its format
+from a declarative profile, and turns the structure the logger already wrote into **facets, counts
+and a brushable timeline** — the Datadog experience, on a local file, with no server.
+
+Born from `LogViewerActivity` in the Withings HealthMate Android app, which had the right idea on a
+6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
+`withings-healthmate` profile is the reference format; nothing about it is compiled in.
+
+**State: M0, M1, M2 done. M3 next.** 90 tests, `main`, no remote yet. Docs in `docs/` (French);
+the code, README and profiles are English.
+
+---
+
+## Layout
+
+| Module | Owns | Depends on |
+|---|---|---|
+| `core/` | Everything that is not a pixel: profiles, indexing, queries, merging | ktoml, coroutines, kotlinx-serialization |
+| `desktop/` | Compose window, state holder, panels | `:core`, `compose.desktop.currentOs` |
+| `spike/` | Fixture generator + benchmark harness | `:core` |
+| `profiles/` | Bundled `*.logprofile.toml`, copied into the jar under `/profiles/` | — |
+
+`generateProfileIndex` writes `/profiles/index.txt` so `ProfileRegistry.bundled()` can enumerate
+them from inside a jar. It is generated, never hand-edited.
+
+---
+
+## Invariants — break these and the design stops working
+
+Each of these was decided for a reason that is not obvious from the code alone. The reason is in
+the KDoc at the site; this is the index.
+
+**Memory and speed**
+- **The text never enters the heap.** The index stores `(fileId, byteOffset, byteLength)`; files are
+  memory-mapped and only the ~40 rows on screen are ever turned into `String`s. 30 bytes/entry,
+  independent of line length.
+- **Chunked `ByteArray` reads for the sequential pass, `mmap` for random access.** A per-byte `get()`
+  on a `MappedByteBuffer` keeps its bounds check and does not vectorise; a `ByteArray` scan does.
+- **Continuation is tested *before* the parse regex.** 18.6 % of lines in a real HealthMate file are
+  continuations; this is the single biggest lever on the indexing budget. Reversing the two branches
+  in `LogIndexer` turns one expensive match per entry into one per line.
+- **A `ValueDictionary` is fed chars *or* bytes, never both** — they hash differently. Enforced, not
+  documented, because mixing them corrupts the slot table silently.
+- **The merge never sorts.** Each file is already ascending, so `IndexMerger` is a k-way merge over a
+  binary heap. It remaps dictionary ids rather than re-interning.
+
+**Semantics**
+- **`entry.continues` is exact; `entry.opens` is a *necessary condition only*.** The parse regex runs
+  right after `opens` and has the final say, which is what lets a positional pre-filter be derived
+  from a regex no literal prefix can express. Never make `opens` a `RegexMatch` — a regex in front of
+  a regex costs two `String` allocations and buys nothing.
+- **The `file` is a facet, not a column.** `file:2026-06-02` then works in the query language for
+  free, and a single open file pays nothing for it.
+- **A profile reports every problem at once**, at load time. Hand-written profiles are usually wrong
+  in more than one way on the first try.
+
+**UI**
+- **The query text is the single source of truth.** Ticking a facet does not update a hidden
+  selection model — `QueryEdits` splices the text you can see. That is how `level>=W` gets learned
+  without reading a grammar. Anything the splice does not understand (a phrase, a regex, a
+  deliberately-typed `-category:Ui`) survives in place; a negated term is never rewritten.
+- **Every control is counted with its own constraint lifted.** The number beside `Wpp` is what you
+  would get *by clicking it*; the timeline draws with the time window lifted and marks the selection
+  with a band. Counting over the current result set shows the answer where the question belongs, and
+  removes the context that made the control worth using.
+- **Rows are one line tall, always.** A wrapping row makes every scroll position a layout pass, which
+  kills the virtualised list. Full text goes in the detail pane; stack traces expand on demand.
+- **Only Warn and Error carry colour.** Seven lines in ten are Debug; colouring every level is the
+  same as colouring none.
+- **`Results` carries the query it was computed for.** That is what makes the "catching up" indicator
+  honest instead of a boolean somebody forgot to clear.
+- **Never `fillMaxSize()` a `VerticalScrollbar`.** It then covers the list and eats every click and
+  gesture. Cost us both "cannot scroll" and "clicking does something weird". `fillMaxHeight()`.
+
+---
+
+## Performance budget
+
+Measured on 1 GiB / 9,013,588 entries, Apple M5 Pro, JDK 17. Full method in `docs/m0-perf-spike.md`.
+
+| | Target | Actual |
+|---|---|---|
+| Indexing | < 5 s at 5 M entries | 411 ns/entry → **2.06 s** |
+| Facet filter | < 100 ms | **1–6 ms** (18 workers) |
+| Full-text search | < 500 ms | **41–117 ms** parallel, 527–659 ms sequential |
+| Index memory | RSS < 500 MB | **30 bytes/entry** — 258 MiB at 9 M |
+
+Reference points: the hardcoded M0 parser was 386 ns/entry, so genericity costs ~6 %. The
+hand-written `ByteScannerEntryParser` is 152 ns/entry — it is the floor and a second opinion in the
+tests, **not** a shipping path. If a profile ever becomes a measured hot spot, that is the shape its
+compiled form takes.
+
+### Benchmarking: one strategy per JVM
+
+```bash
+./gradlew :spike:run --args="1g A"   # generic profile parser
+./gradlew :spike:run --args="1g C"   # byte scanner
+./gradlew :spike:run --args="1g"     # both — for the CROSS-CHECK only, never for timings
+```
+
+Running several parsers in one JVM makes shared call sites polymorphic and has produced a **phantom
+2× slowdown twice now**. The harness prints the warning itself. Do not quote a number from a
+combined run.
+
+---
+
+## Commands
+
+```bash
+./gradlew test                                   # 90 tests, all three modules
+./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
+./gradlew :desktop:packageDmg                    # unsigned .dmg
+./gradlew build                                  # must be warning-free
+```
+
+A multi-day fixture folder lives in `spike/fixtures/` (gitignored, regenerate on demand). It should
+contain several day files with overlapping timestamps plus one file the profile does *not*
+recognise, so it exercises the merge and the skip path.
+
+---
+
+## Conventions
+
+**Kotlin.** Explicit return and property types. No abbreviations, no single-letter names — name
+lambda parameters (`{ facet -> … }`) rather than leaning on `it` past a one-liner. `companion object`
+first in the class body. No wildcard imports. Exhaustive `when` over sealed types, no `else`.
+
+**Comments.** Default to none — naming carries the meaning. Write one when it says something the
+code *cannot*: why a branch order matters, what a measurement showed, which failure a guard prevents.
+Never paraphrase the next line. Keep them in sync when the code changes.
+
+**Tests.** JUnit 5, `// Given / When / Then`. Assert on what a query *selects*, not on how many
+things it selected — a filter returning the right count of the wrong entries is the failure that
+matters. Golden cases for the format go through **both** parsers.
+
+**Commits.** `Prefix: Title` with prefix ∈ Feat / Clean / Fix / Docs / CI / Refactor. The body
+explains *why*, and records what a measurement corrected. Direct commits to `main` are fine while
+the repo has no remote and one author.
+
+**Dependencies.** Three, and each was argued: ktoml (pure Kotlin so Compose's native targets stay
+open), kotlinx-coroutines, kotlinx-serialization. Compose is `compose.desktop.currentOs` only — no
+Material, the UI is built on `foundation` with the tokens in `theme/LoupeTheme.kt`. Adding a fourth
+needs a reason in the commit body.
+
+**Versions.** Kotlin 2.4.0, Compose Multiplatform 1.11.1, JDK 17 toolchain. The Compose *compiler*
+plugin must track the Kotlin version exactly. `google()` is in the repositories because CMP's runtime
+is built on androidx artifacts that live nowhere else.
+
+---
+
+## Where to read
+
+| | |
+|---|---|
+| `docs/PRD.fr.md` | The product spec — users, differentiation, scope, milestones. Start here. |
+| `docs/m0-perf-spike.md` | Why the engine looks like this, and the numbers behind every claim. |
+| `docs/m1-core.md` | The profile system, and the exact-vs-necessary predicate distinction. |
+| `docs/m2-ui.md` | The three UI forks, decided, and what the screen deliberately does not do. |
+| `profiles/withings.logprofile.toml` | The reference profile, heavily commented — the format's spec. |
+
+---
+
+## M3 scope, and known gaps
+
+- **Multi-select and copy.** One click selects one entry today. The click / `⇧`-click / `⌘A` model
+  has to be hand-written: `SelectionContainer` over `LazyColumn` is unstable on Compose Desktop, and
+  that risk was called in the PRD before any of this was written.
+- Keyboard shortcuts (`⌘F`, `⌘L`, `j`/`k`), export of the current filter, unfiltered ±N lines of
+  context around the selected entry, horizontal scrolling of the list.
+- `MappedText` caps at 2 GiB per file — one mapping, no segmentation yet.
+- Section markers (`=== … ===`) are counted but do not become a `source` facet.
+- **One bundled profile.** `android-logcat`, `json-lines`, `syslog` and `generic-timestamped` are due
+  at M4, and each will exercise the timestamp compiler's fallback path, which has one test today.
+- Not yet decided: the Gradle group / bundle id (`dev.loupe` if the domain is taken, else
+  `io.github.<account>`), and Apple notarisation for a public `.dmg`.
