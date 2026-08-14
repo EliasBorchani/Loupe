@@ -60,6 +60,19 @@ class ValueDictionary(expectedValues: Int = 64) {
         }
     }
 
+    /**
+     * Interns a whole value at once, carrying [occurrences] with it.
+     *
+     * Only the merge path uses this: combining two files' dictionaries has to preserve counts that
+     * were already tallied, and calling [intern] in a loop would be O(entries) for a number the
+     * source dictionary already knows.
+     */
+    fun internString(value: String, occurrences: Int): Int {
+        val id: Int = intern(value, 0, value.length)
+        valueCounts[id] = valueCounts[id] + (occurrences - 1)
+        return id
+    }
+
     /** Number of entries that carried this value — the facet count, with no second pass. */
     fun countOf(id: Int): Int = valueCounts[id]
 

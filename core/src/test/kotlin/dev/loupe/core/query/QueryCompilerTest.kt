@@ -2,7 +2,7 @@ package dev.loupe.core.query
 
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
-import dev.loupe.core.io.MappedText
+import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
 import dev.loupe.core.profile.ProfileRegistry
@@ -45,7 +45,7 @@ class QueryCompilerTest {
     lateinit var temporaryDirectory: File
 
     private lateinit var index: LogIndex
-    private lateinit var text: MappedText
+    private lateinit var text: TextSources
     private lateinit var compiler: QueryCompiler
 
     @BeforeEach
@@ -53,7 +53,7 @@ class QueryCompilerTest {
         val file = File(temporaryDirectory, "2026-07-22")
         file.writeText(CORPUS.joinToString("\n", postfix = "\n"))
         index = LogIndexer(ProfileEntryParser(WITHINGS)).index(file)
-        text = MappedText(file)
+        text = TextSources.of(file)
         compiler = QueryCompiler(index, ZONE)
     }
 
@@ -183,6 +183,6 @@ class QueryCompilerTest {
 
     /** The trailing message word of each selected entry, which is unique per corpus line. */
     private fun messagesOf(entries: List<Int>): List<String> = entries.map { entry ->
-        text.decode(index.byteOffsets[entry], index.byteLengths[entry]).substringAfter("-> ").substringBefore(' ')
+        text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]).substringAfter("-> ").substringBefore(' ')
     }
 }

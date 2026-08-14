@@ -1,6 +1,6 @@
 package dev.loupe.core.index
 
-import dev.loupe.core.io.MappedText
+import dev.loupe.core.io.TextSources
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -55,7 +55,7 @@ class EntryFilter(
      * @param destination reused across evaluations; must hold [LogIndex.entryCount] ints.
      * @return how many indices were written.
      */
-    fun evaluate(index: LogIndex, text: MappedText?, destination: IntArray): Int =
+    fun evaluate(index: LogIndex, text: TextSources?, destination: IntArray): Int =
         evaluateRange(index, text, destination, 0, 0, index.entryCount)
 
     /**
@@ -71,7 +71,7 @@ class EntryFilter(
      */
     fun evaluateParallel(
         index: LogIndex,
-        text: MappedText?,
+        text: TextSources?,
         destination: IntArray,
         workerCount: Int = Runtime.getRuntime().availableProcessors(),
     ): Int {
@@ -104,7 +104,7 @@ class EntryFilter(
     /** The one hot loop. Everything above is scheduling. */
     private fun evaluateRange(
         index: LogIndex,
-        text: MappedText?,
+        text: TextSources?,
         destination: IntArray,
         destinationOffset: Int,
         fromEntry: Int,
@@ -127,13 +127,16 @@ class EntryFilter(
             if (facetConstraints != null && !facetsAccept(index, entry)) continue
 
             if (substringLowercase != null && text != null &&
-                !text.containsIgnoreCase(index.byteOffsets[entry], index.byteLengths[entry], substringLowercase)
+                !text.containsIgnoreCase(
+                    index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry], substringLowercase,
+                )
             ) {
                 continue
             }
 
             if (regex != null && text != null &&
-                !regex.matcher(text.decode(index.byteOffsets[entry], index.byteLengths[entry])).find()
+                !regex.matcher(text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]))
+                    .find()
             ) {
                 continue
             }

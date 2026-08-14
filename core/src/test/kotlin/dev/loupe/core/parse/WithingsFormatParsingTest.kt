@@ -2,7 +2,7 @@ package dev.loupe.core.parse
 
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
-import dev.loupe.core.io.MappedText
+import dev.loupe.core.io.TextSources
 import dev.loupe.core.profile.CompiledProfile
 import dev.loupe.core.profile.ProfileRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -275,7 +275,7 @@ class WithingsFormatParsingTest {
 
     /** Reads an entry back through the same `(offset, length)` path the UI would use. */
     private fun readEntry(file: File, index: LogIndex, entry: Int): String =
-        MappedText(file).use { text -> text.decode(index.byteOffsets[entry], index.byteLengths[entry]) }
+        TextSources.of(file).use { text -> text.decode(0, index.byteOffsets[entry], index.byteLengths[entry]) }
 
     private fun write(vararg lines: String): File {
         val file = File(temporaryDirectory, "2026-07-22")

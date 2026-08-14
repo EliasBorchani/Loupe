@@ -3,7 +3,7 @@ package dev.loupe.spike
 import dev.loupe.core.index.EntryFilter
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
-import dev.loupe.core.io.MappedText
+import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ByteScannerEntryParser
 import dev.loupe.core.parse.EntryParser
 import dev.loupe.core.parse.ProfileEntryParser
@@ -60,7 +60,7 @@ fun main(args: Array<String>) {
 
     val reference: LogIndex = results.first().index
     printCorpusShape(reference)
-    MappedText(fixture).use { text -> printQueryReport(reference, text) }
+    TextSources.of(fixture).use { text -> printQueryReport(reference, text) }
 }
 
 private fun detectProfile(fixture: File): CompiledProfile {
@@ -251,7 +251,7 @@ private fun printCorpusShape(index: LogIndex) {
 }
 
 /** Runs the query language end to end — the same path the query bar will take. */
-private fun printQueryReport(index: LogIndex, text: MappedText) {
+private fun printQueryReport(index: LogIndex, text: TextSources) {
     println()
     println("─".repeat(96))
     println("QUERIES — over ${index.entryCount} entries, ${Runtime.getRuntime().availableProcessors()} workers when parallel")

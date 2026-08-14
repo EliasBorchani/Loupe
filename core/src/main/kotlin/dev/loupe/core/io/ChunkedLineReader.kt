@@ -37,10 +37,13 @@ class ChunkedLineReader(
     }
 
     /**
+     * @param onChunkRead invoked once per chunk with the total bytes consumed so far. Chunk
+     *   granularity is deliberate: per-line would be nine million callbacks, per-file would leave
+     *   a 1 GiB single file sitting at 0 % for three seconds.
      * @return the number of lines visited. A trailing chunk without a final newline still yields
      *   its last line.
      */
-    fun forEachLine(visitor: LineVisitor): Long {
+    fun forEachLine(onChunkRead: ((Long) -> Unit)? = null, visitor: LineVisitor): Long {
         var buffer = ByteArray(chunkSize)
         var lineCount = 0L
 
@@ -49,11 +52,15 @@ class ChunkedLineReader(
             var carriedBytes = 0
             // Absolute file offset of buffer[0].
             var bufferFileOffset = 0L
+            var consumedBytes = 0L
 
             while (true) {
                 val readable: ByteBuffer = ByteBuffer.wrap(buffer, carriedBytes, buffer.size - carriedBytes)
                 val bytesRead: Int = channel.read(readable)
                 if (bytesRead <= 0) break
+
+                consumedBytes += bytesRead
+                onChunkRead?.invoke(consumedBytes)
 
                 val filled: Int = carriedBytes + bytesRead
                 var lineStart = 0

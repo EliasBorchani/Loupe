@@ -26,7 +26,10 @@ class LogIndexer(private val parser: EntryParser) {
         private const val INITIAL_CAPACITY = 1 shl 16
     }
 
-    fun index(file: File): LogIndex {
+    /**
+     * @param onBytesRead invoked as the file is consumed, for a progress bar. Chunk granularity.
+     */
+    fun index(file: File, onBytesRead: ((Long) -> Unit)? = null): LogIndex {
         val facetCount: Int = parser.profile.facets.size
         val columns = EntryColumns(INITIAL_CAPACITY, facetCount)
         val dictionaries: Array<ValueDictionary> = Array(facetCount) { ValueDictionary(expectedValues = 64) }
@@ -42,7 +45,7 @@ class LogIndexer(private val parser: EntryParser) {
         var openEntryOffset = -1L
         var openEntryEndOffset = -1L
 
-        val lineCount: Long = ChunkedLineReader(file).forEachLine { buffer, start, end, fileOffset ->
+        val lineCount: Long = ChunkedLineReader(file).forEachLine(onBytesRead) { buffer, start, end, fileOffset ->
             val lineEndOffset: Long = fileOffset + (end - start)
 
             if (openEntryOffset >= 0L && parser.isContinuation(buffer, start, end)) {
@@ -144,6 +147,7 @@ private class EntryColumns(initialCapacity: Int, private val facetCount: Int) {
         unrecognisedLineCount: Long,
     ): LogIndex = LogIndex(
         profile = profile,
+        facets = profile.facets,
         entryCount = size,
         timestamps = timestamps.copyOf(size),
         levels = levels.copyOf(size),
