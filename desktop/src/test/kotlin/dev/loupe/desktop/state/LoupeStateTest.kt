@@ -212,6 +212,70 @@ class LoupeStateTest {
     }
 
     @Test
+    fun `arrows start at an end when nothing is selected`() = runBlocking {
+        // Given
+        val source: LogSource = openFolder()
+        awaitResults("")
+
+        // When / Then — the first press always lands somewhere useful.
+        state.moveSelection(1)
+        assertEquals("before-midnight", messageOf(source, requireNotNull(state.selectedEntry.value)))
+
+        state.select(null)
+        state.moveSelection(-1)
+        assertEquals("morning", messageOf(source, requireNotNull(state.selectedEntry.value)))
+    }
+
+    @Test
+    fun `arrows step through the result, not through the index`() = runBlocking {
+        // Given — Sync matches entries 0, 1 and 4 of the merged stream; 2 and 3 are Wpp.
+        val source: LogSource = openFolder()
+        state.setQuery("category:Sync")
+        awaitResults("category:Sync")
+        state.select(entryWithMessage(source, "retry"))
+
+        // When
+        state.moveSelection(1)
+
+        // Then — the next *match*, skipping the two entries the query excluded.
+        assertEquals("gave-up", messageOf(source, requireNotNull(state.selectedEntry.value)))
+    }
+
+    @Test
+    fun `arrows stop at the ends instead of wrapping`() = runBlocking {
+        // Given — in a list of nine million, teleporting to the far end is never what was meant.
+        val source: LogSource = openFolder()
+        awaitResults("")
+        state.select(entryWithMessage(source, "before-midnight"))
+
+        // When
+        repeat(3) { state.moveSelection(-1) }
+
+        // Then
+        assertEquals("before-midnight", messageOf(source, requireNotNull(state.selectedEntry.value)))
+
+        // When
+        repeat(20) { state.moveSelection(1) }
+
+        // Then
+        assertEquals("morning", messageOf(source, requireNotNull(state.selectedEntry.value)))
+    }
+
+    @Test
+    fun `an empty result leaves the selection alone`() = runBlocking {
+        // Given
+        openFolder()
+        state.setQuery("\"nothing matches this\"")
+        assertEquals(0, awaitResults("\"nothing matches this\"").matchCount)
+
+        // When
+        state.moveSelection(1)
+
+        // Then
+        assertEquals(null, state.selectedEntry.value)
+    }
+
+    @Test
     fun `a typo is reported and the rest of the query still narrows`() = runBlocking {
         // Given
         openFolder()
@@ -252,6 +316,15 @@ class LoupeStateTest {
         // Then
         assertTrue(failure.message.contains("~/.loupe/profiles/"), failure.message)
     }
+
+    private fun entryWithMessage(source: LogSource, message: String): Int =
+        (0 until source.index.entryCount).first { entry -> messageOf(source, entry) == message }
+
+    private fun messageOf(source: LogSource, entry: Int): String = source.text
+        .decode(source.index.fileIdOf(entry), source.index.byteOffsets[entry], source.index.byteLengths[entry])
+        .substringAfter("-> ")
+        .substringBefore('\n')
+        .substringBefore(' ')
 
     private suspend fun openFolder(): LogSource {
         state.open(listOf(folder))

@@ -2,6 +2,7 @@ package dev.loupe.desktop.ui
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,13 +14,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,16 +71,49 @@ fun LogList(
     expandedEntries: Set<Int>,
     onSelect: (Int) -> Unit,
     onToggleExpanded: (Int) -> Unit,
+    onMoveSelection: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
     val listState = rememberLazyListState()
+    val listFocus = remember { FocusRequester() }
     val zone: ZoneId = remember { ZoneId.systemDefault() }
     val index: LogIndex = source.index
     val levelCount: Int = index.profile.levelCount
     val levelSymbols: List<String> = remember(index) { index.profile.levelDecoder?.order ?: emptyList() }
 
-    Box(modifier = modifier.background(colors.surface)) {
+    // The list takes focus when a file opens, so the arrows work without a click first. Clicking a
+    // row focuses it too — its `clickable` makes it focusable — and the key handler sits on the
+    // container, which still sees the event as it bubbles up from the focused row.
+    LaunchedEffect(source) { runCatching { listFocus.requestFocus() } }
+
+    // Follows the selection rather than driving it, so arrow keys and clicks scroll identically.
+    LaunchedEffect(selectedEntry, results) {
+        val entry: Int = selectedEntry ?: return@LaunchedEffect
+        val position: Int = results.positionOf(entry)
+        if (position >= 0) listState.keepInView(position)
+    }
+
+    Box(
+        modifier = modifier
+            .background(colors.surface)
+            .focusRequester(listFocus)
+            .focusable()
+            // Preview, not the bubbling pass: it runs on the way down to the focused node, so the
+            // arrow is ours before the LazyColumn or a focused row can read it as a scroll or a
+            // focus move. The Box wraps only the list, so a cursor in the query bar is untouched.
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionDown -> onMoveSelection(1)
+                    Key.DirectionUp -> onMoveSelection(-1)
+                    // Anything else belongs to whoever asked for it — a swallowed key is worse
+                    // than an unhandled one.
+                    else -> return@onPreviewKeyEvent false
+                }
+                true
+            },
+    ) {
         if (results.matchCount == 0) {
             EmptyResults(Modifier.align(Alignment.Center))
             return@Box
@@ -137,6 +180,27 @@ fun LogList(
             adapter = rememberScrollbarAdapter(listState),
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
         )
+    }
+}
+
+/**
+ * Scrolls only when [position] is at or past an edge, keeping one row of margin.
+ *
+ * Scrolling unconditionally would jerk the list every time a visible row was clicked; the margin
+ * means arrowing towards an edge moves the viewport before the selection reaches it, so the next
+ * row is already on screen when you get there.
+ */
+private suspend fun LazyListState.keepInView(position: Int) {
+    val visible = layoutInfo.visibleItemsInfo
+    if (visible.isEmpty()) {
+        scrollToItem(position)
+        return
+    }
+    val first: Int = visible.first().index
+    val last: Int = visible.last().index
+    when {
+        position <= first -> scrollToItem(maxOf(0, position - 1))
+        position >= last -> scrollToItem(maxOf(0, position - (last - first) + 1))
     }
 }
 

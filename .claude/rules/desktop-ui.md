@@ -68,6 +68,11 @@ and only the top two levels get a hue. Seven lines in ten are Debug.
   hand-written. Do not reach for it as a shortcut.
 - Coordinates in `pointerInput` are relative to whatever the modifier chain has already applied.
   Put `.padding()` before `.pointerInput()` and the drag maths matches the `Canvas` draw scope.
+- **Keys that a scrollable might also want go on `onPreviewKeyEvent`, not `onKeyEvent`.** Preview
+  runs down towards the focused node; the bubbling pass runs after whoever had focus already had
+  its say, so an arrow can be read as a scroll or a focus move before you ever see it. Scope it to
+  the container that owns the interaction — the list's Box does not wrap the query bar, so a cursor
+  in the text field is untouched.
 
 ## Every control is counted with its own constraint lifted
 The number beside a facet value is what you would get **by clicking it**; the timeline draws with

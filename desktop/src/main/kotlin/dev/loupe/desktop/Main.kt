@@ -197,6 +197,7 @@ private fun Loaded(
                         expandedEntries = expandedEntries,
                         onSelect = state::select,
                         onToggleExpanded = state::toggleExpanded,
+                        onMoveSelection = state::moveSelection,
                         modifier = Modifier.weight(1f),
                     )
                 } else {

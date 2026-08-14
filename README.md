@@ -60,7 +60,7 @@ the numbers that did *not* meet target on the first attempt:
 
 ```bash
 ./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
-./gradlew test                           # 86 tests
+./gradlew test                           # 94 tests
 ./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
 ./gradlew :desktop:packageDmg            # unsigned .dmg
 ```
@@ -74,7 +74,7 @@ Requires JDK 17+. No other setup.
 | **M0** | Performance spike — columnar index, parser strategies, benchmarks | ✅ done |
 | **M1** | Core — TOML profiles, format auto-detection, query language | ✅ done |
 | **M2** | UI — Compose Multiplatform window, virtualised list, facets, query bar, timeline | ✅ done |
-| **M3** | Product — multi-select and copy, keyboard shortcuts, export, unfiltered context | next |
+| **M3** | Product — multi-select and copy, more shortcuts, export, unfiltered context | next |
 | **M4** | Public — English docs, bundled profiles, CI, notarised `.dmg` |  |
 
 Full product spec (in French): [`docs/PRD.fr.md`](docs/PRD.fr.md).

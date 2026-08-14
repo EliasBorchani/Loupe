@@ -8,7 +8,7 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0, M1, M2 done. M3 next.** 90 tests, `main`, no remote yet. Docs in `docs/` (French);
+**State: M0, M1, M2 done. M3 next.** 94 tests, `main`, no remote yet. Docs in `docs/` (French);
 the code, README and profiles are English.
 
 ---
@@ -123,7 +123,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 90 tests, all three modules
+./gradlew test                                   # 94 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg
 ./gradlew build                                  # must be warning-free
@@ -149,11 +149,12 @@ recognise, so it exercises the merge and the skip path.
 
 ## M3 scope, and known gaps
 
-- **Multi-select and copy.** One click selects one entry today. The click / `⇧`-click / `⌘A` model
-  has to be hand-written: `SelectionContainer` over `LazyColumn` is unstable on Compose Desktop, and
-  that risk was called in the PRD before any of this was written.
-- Keyboard shortcuts (`⌘F`, `⌘L`, `j`/`k`), export of the current filter, unfiltered ±N lines of
-  context around the selected entry, horizontal scrolling of the list.
+- **Multi-select and copy.** One click selects one entry, `↑`/`↓` move through the result. The
+  click / `⇧`-click / `⌘A` model has to be hand-written: `SelectionContainer` over `LazyColumn` is
+  unstable on Compose Desktop, and that risk was called in the PRD before any of this was written.
+- More shortcuts (`⌘F`, `⌘L`, `j`/`k`, `Page↑`/`Page↓` — `moveSelection` already does the work),
+  export of the current filter, unfiltered ±N lines of context around the selected entry,
+  horizontal scrolling of the list.
 - `MappedText` caps at 2 GiB per file — one mapping, no segmentation yet.
 - Section markers (`=== … ===`) are counted but do not become a `source` facet.
 - **One bundled profile.** `android-logcat`, `json-lines`, `syslog` and `generic-timestamped` are due

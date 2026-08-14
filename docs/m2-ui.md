@@ -1,7 +1,7 @@
 # M2 — L'écran
 
 **L'app tourne.** Compose Multiplatform, fenêtre macOS, ouverture d'un dossier, facettes, requête,
-timeline brossable, panneau de détail. 86 tests au vert sur les trois modules.
+timeline brossable, panneau de détail. 94 tests au vert sur les trois modules.
 
 Les trois arbitrages du [brief de conception](https://claude.ai/code/artifact/59cda4e2-7101-44eb-acaf-1fcb5fb3a3ea)
 sont tranchés et implémentés :
@@ -53,6 +53,13 @@ quelqu'un a oublié de remettre à zéro.
   largeur gaspillée ; elle vit dans la barre latérale, où elle sert à filtrer.
 - **Les buckets de la timeline couvrent tout le fichier**, même quand la requête l'a réduit : une
   carte qui se remet à l'échelle sous vos pieds n'est pas une carte.
+- **Les flèches parcourent le résultat, pas l'index.** `moveSelection(±1)` avance dans
+  `results.matches` — avec `category:Sync` actif, descendre saute les entrées que la requête exclut.
+  Aux extrémités ça s'arrête plutôt que de boucler : dans une liste de neuf millions, se téléporter
+  à l'autre bout n'est jamais ce qu'on voulait.
+- **Le défilement suit la sélection, il ne la pilote pas.** Un clic et une flèche défilent
+  identiquement, et seulement quand la sélection atteint un bord — avec une ligne de marge, pour que
+  la suivante soit déjà à l'écran quand on y arrive.
 
 ---
 
@@ -76,10 +83,12 @@ servirait.
 
 ## Ce qui manque, et c'est assumé
 
-- **Sélection multiple et copie.** Un clic sélectionne une entrée, `copy` copie son texte brut.
-  Le modèle clic / `⇧`+clic / `⌘A` reste à écrire — c'est le risque identifié au PRD
-  (`SelectionContainer` sur `LazyColumn` est instable, donc le modèle sera fait main).
-- **Raccourcis clavier.** `⌘F`, `⌘L`, `j`/`k` : rien pour l'instant.
+- **Sélection multiple et copie.** Un clic sélectionne une entrée, les flèches ↑/↓ déplacent la
+  sélection dans le résultat filtré, `copy` copie le texte brut. Le modèle clic / `⇧`+clic / `⌘A`
+  reste à écrire — c'est le risque identifié au PRD (`SelectionContainer` sur `LazyColumn` est
+  instable, donc le modèle sera fait main).
+- **Autres raccourcis.** `⌘F`, `⌘L`, `j`/`k`, `Page↑`/`Page↓` : rien pour l'instant. Le mécanisme
+  est en place (`LoupeState.moveSelection`), il ne manque que les touches.
 - **Contexte non filtré** autour de l'entrée sélectionnée (± N lignes).
 - **Défilement horizontal** de la liste : les lignes longues sont tronquées, le détail les montre
   en entier.
@@ -90,7 +99,7 @@ servirait.
 ```bash
 ./gradlew :desktop:run                              # fenêtre vide, glisser-déposer un dossier
 ./gradlew :desktop:run --args="/chemin/vers/logs"   # ouvre directement
-./gradlew test                                      # 86 tests
+./gradlew test                                      # 94 tests
 ./gradlew :desktop:packageDmg                       # .dmg (non signé pour l'instant)
 ```
 

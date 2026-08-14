@@ -58,6 +58,28 @@ class Results(
     val elapsedMillis: Long,
 ) {
     val histogram: Array<IntArray> get() = counts.timeline
+
+    /**
+     * Where [entry] sits in the result, or `-1` if the query no longer selects it.
+     *
+     * A binary search, which is only valid because [matches] is ascending — both the sequential
+     * and the parallel evaluation preserve entry order, the latter by compacting its workers'
+     * slices in order rather than as they finish.
+     */
+    fun positionOf(entry: Int): Int {
+        var low = 0
+        var high = matchCount - 1
+        while (low <= high) {
+            val middle: Int = (low + high) ushr 1
+            val candidate: Int = matches[middle]
+            when {
+                candidate < entry -> low = middle + 1
+                candidate > entry -> high = middle - 1
+                else -> return middle
+            }
+        }
+        return -1
+    }
 }
 
 /**
@@ -161,6 +183,26 @@ class LoupeState(private val scope: CoroutineScope) {
 
     fun select(entry: Int?) {
         _selectedEntry.value = entry
+    }
+
+    /**
+     * Moves the selection [delta] rows through the **result**, not through the index.
+     *
+     * With nothing selected yet, a step down starts at the top and a step up at the bottom, so the
+     * first arrow press always lands somewhere useful. At either end it stops rather than wrapping:
+     * in a list of nine million, silently teleporting to the far end is never what was meant.
+     */
+    fun moveSelection(delta: Int) {
+        val current: Results = results.value ?: return
+        if (current.matchCount == 0) return
+
+        val position: Int = _selectedEntry.value?.let { entry -> current.positionOf(entry) } ?: -1
+        val next: Int = if (position < 0) {
+            if (delta > 0) 0 else current.matchCount - 1
+        } else {
+            (position + delta).coerceIn(0, current.matchCount - 1)
+        }
+        _selectedEntry.value = current.matches[next]
     }
 
     fun toggleExpanded(entry: Int) {
