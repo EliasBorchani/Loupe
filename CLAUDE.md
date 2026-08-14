@@ -25,6 +25,20 @@ the code, README and profiles are English.
 `generateProfileIndex` writes `/profiles/index.txt` so `ProfileRegistry.bundled()` can enumerate
 them from inside a jar. It is generated, never hand-edited.
 
+Packages are the responsibility buckets below — don't invent a new one without a reason:
+
+```
+dev.loupe.core.{index, io, parse, profile, query, source}
+dev.loupe.desktop.{state, theme, ui}
+```
+
+## Conventions
+
+In `.claude/rules/` — `kotlin-style`, `code-comments`, `testing`, `performance`, `desktop-ui`,
+`dependencies`, `git-workflow`. They are **path-scoped**, so each loads when you touch the code it
+governs; this file loads always. Where the two overlap it is on purpose: the invariants below are
+the always-on safety net, the rules carry the detail and the examples.
+
 ---
 
 ## Invariants — break these and the design stops working
@@ -118,35 +132,6 @@ combined run.
 A multi-day fixture folder lives in `spike/fixtures/` (gitignored, regenerate on demand). It should
 contain several day files with overlapping timestamps plus one file the profile does *not*
 recognise, so it exercises the merge and the skip path.
-
----
-
-## Conventions
-
-**Kotlin.** Explicit return and property types. No abbreviations, no single-letter names — name
-lambda parameters (`{ facet -> … }`) rather than leaning on `it` past a one-liner. `companion object`
-first in the class body. No wildcard imports. Exhaustive `when` over sealed types, no `else`.
-
-**Comments.** Default to none — naming carries the meaning. Write one when it says something the
-code *cannot*: why a branch order matters, what a measurement showed, which failure a guard prevents.
-Never paraphrase the next line. Keep them in sync when the code changes.
-
-**Tests.** JUnit 5, `// Given / When / Then`. Assert on what a query *selects*, not on how many
-things it selected — a filter returning the right count of the wrong entries is the failure that
-matters. Golden cases for the format go through **both** parsers.
-
-**Commits.** `Prefix: Title` with prefix ∈ Feat / Clean / Fix / Docs / CI / Refactor. The body
-explains *why*, and records what a measurement corrected. Direct commits to `main` are fine while
-the repo has no remote and one author.
-
-**Dependencies.** Three, and each was argued: ktoml (pure Kotlin so Compose's native targets stay
-open), kotlinx-coroutines, kotlinx-serialization. Compose is `compose.desktop.currentOs` only — no
-Material, the UI is built on `foundation` with the tokens in `theme/LoupeTheme.kt`. Adding a fourth
-needs a reason in the commit body.
-
-**Versions.** Kotlin 2.4.0, Compose Multiplatform 1.11.1, JDK 17 toolchain. The Compose *compiler*
-plugin must track the Kotlin version exactly. `google()` is in the repositories because CMP's runtime
-is built on androidx artifacts that live nowhere else.
 
 ---
 
