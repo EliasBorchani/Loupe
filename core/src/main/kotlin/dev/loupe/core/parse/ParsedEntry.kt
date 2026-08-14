@@ -1,54 +1,57 @@
 package dev.loupe.core.parse
 
-import dev.loupe.core.model.LogLevel
+import dev.loupe.core.profile.CompiledProfile
+import dev.loupe.core.profile.LevelDecoder
 
 /**
  * Mutable, reused sink for one parsed opening line.
  *
- * Fields are handed back as `[start, end)` offsets **into the caller's buffer**, never as strings:
- * the indexer interns them straight from those bytes ([dev.loupe.core.index.ValueDictionary]).
+ * Facet values are handed back as offsets rather than strings so the indexer can intern them
+ * without allocating. Which coordinate space those offsets are in depends on the parser and is
+ * declared by [facetsAreCharOffsets]: a regex parser has already decoded the line and reports
+ * offsets into that `String`, while a hand-written scanner works on the read buffer and reports
+ * byte offsets. Conflating the two would slice a facet in the wrong place on any line containing
+ * a multi-byte character.
+ *
  * One instance per indexing pass, overwritten per line — never retain it.
  */
-class ParsedEntry {
+class ParsedEntry(facetCount: Int, val facetsAreCharOffsets: Boolean) {
 
     companion object {
         const val ABSENT: Int = -1
     }
 
     var timestampMillis: Long = 0L
-    var levelOrdinal: Int = LogLevel.UNKNOWN_ORDINAL
+    var levelOrdinal: Int = LevelDecoder.UNKNOWN_ORDINAL
 
-    var categoryStart: Int = ABSENT
-    var categoryEnd: Int = ABSENT
-    var tagStart: Int = ABSENT
-    var tagEnd: Int = ABSENT
-    var messageStart: Int = ABSENT
+    /** Start of each facet's value; [ABSENT] when the group did not participate in the match. */
+    val facetStarts: IntArray = IntArray(facetCount) { ABSENT }
+    val facetEnds: IntArray = IntArray(facetCount) { ABSENT }
 
-    val hasCategory: Boolean get() = categoryStart != ABSENT
+    /** The decoded line, set by parsers that report char offsets. */
+    var line: CharSequence = ""
 
-    fun reset() {
-        timestampMillis = 0L
-        levelOrdinal = LogLevel.UNKNOWN_ORDINAL
-        categoryStart = ABSENT
-        categoryEnd = ABSENT
-        tagStart = ABSENT
-        tagEnd = ABSENT
-        messageStart = ABSENT
-    }
+    fun hasFacet(facetIndex: Int): Boolean = facetStarts[facetIndex] != ABSENT
 }
 
 /**
  * Recognises the *opening line* of an entry and fills a [ParsedEntry].
  *
- * Continuation lines (a stack trace, a wrapped message) are not passed here: the indexer detects
- * them with [isContinuation] and simply extends the current entry's byte range. That keeps the
- * expensive match to once per entry rather than once per line — the single biggest lever on the
- * indexing budget, since ~6 % of HealthMate lines are continuations.
+ * Continuation lines are never passed here: the indexer tests [isContinuation] first and extends
+ * the current entry's byte range instead. That keeps the expensive match to once per entry rather
+ * than once per line — the single biggest lever on the indexing budget, since M0 measured 18.6 %
+ * of lines in a real HealthMate file as continuations.
  */
 interface EntryParser {
 
-    /** Human-readable name, used by the spike report. */
+    /** Human-readable name, used by reports and benchmarks. */
     val name: String
+
+    /** The format this parser implements. Drives the index's facet columns and level scale. */
+    val profile: CompiledProfile
+
+    /** A sink shaped for this parser — in particular, in its offset space. */
+    fun newSink(): ParsedEntry
 
     /** @return true when the line opened an entry and [sink] was filled. */
     fun parseOpening(buffer: ByteArray, start: Int, end: Int, sink: ParsedEntry): Boolean

@@ -5,28 +5,48 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import java.util.regex.Pattern
+
+/**
+ * Which values of one facet an entry may carry.
+ *
+ * [accepted] is indexed by dictionary id, so the test is an array read rather than a set lookup.
+ * Negation is compiled away by inverting the array — the filter never needs to know that
+ * `-cat:Ui` was written with a minus.
+ */
+class FacetConstraint(
+    val accepted: BooleanArray,
+    /** Whether an entry whose facet group did not match at all passes. `-cat:Ui` says yes. */
+    val acceptMissing: Boolean,
+)
 
 /**
  * A compiled query, evaluated straight over [LogIndex]'s columns.
  *
- * Cheap column predicates run first and the full-text scan last, so the substring search only ever
- * touches entries that already passed every facet — which is why narrowing by category before
- * typing a search term feels instant.
+ * Predicates are ordered by cost: level and time are an array read, facets are an array read
+ * behind an indirection, substring search touches the file, and a regex has to decode the entry
+ * first. Each one only ever sees entries the cheaper ones already accepted, which is why
+ * narrowing by facet before typing a search term feels instant.
  */
 class EntryFilter(
-    /** Keep entries at or above this [dev.loupe.core.model.LogLevel] ordinal. `-1` accepts all. */
-    val minLevelOrdinal: Int = -1,
-    /** Accepted category ids, indexed by id. `null` accepts all — including entries with none. */
-    val acceptedCategories: BooleanArray? = null,
+    /** Indexed by severity ordinal. `null` accepts every level. */
+    val acceptedLevels: BooleanArray? = null,
+    val acceptUnknownLevel: Boolean = true,
+    /** Per facet index, positionally aligned with [LogIndex.facetValues]. `null` accepts all. */
+    val facetConstraints: Array<FacetConstraint?>? = null,
     val sinceMillis: Long = Long.MIN_VALUE,
     val untilMillis: Long = Long.MAX_VALUE,
     /** Already lowercased by the caller, once per query rather than once per entry. */
     val substringLowercase: ByteArray? = null,
+    /** `/…/` search. Decodes each surviving entry, so it runs last and is documented as slow. */
+    val regex: Pattern? = null,
 ) {
 
     companion object {
         /** Below this, the fan-out costs more than the scan saves. */
         private const val MIN_ENTRIES_FOR_PARALLEL = 100_000
+
+        val ACCEPT_ALL: EntryFilter = EntryFilter()
     }
 
     /**
@@ -41,10 +61,13 @@ class EntryFilter(
     /**
      * Same result as [evaluate], fanned out over the default dispatcher.
      *
-     * Each worker scans a contiguous slice and writes into its own region of [destination] — the
-     * region starting at its own first entry index, which cannot overflow into the next worker's
-     * since a slice never produces more matches than it holds. A compaction pass then closes the
-     * gaps, which is a handful of `arraycopy`s and costs nothing next to the scan.
+     * Each worker scans a contiguous slice and writes into the region of [destination] starting at
+     * its own first entry index — which cannot overflow into the next worker's, since a slice never
+     * produces more matches than it holds. A compaction pass then closes the gaps, a handful of
+     * `arraycopy`s that cost nothing next to the scan.
+     *
+     * M0 measured full-text search at 659 ms sequential and 116 ms across 18 workers on a 1 GiB
+     * corpus, against a 500 ms target: for anything touching the text, this is the required path.
      */
     fun evaluateParallel(
         index: LogIndex,
@@ -89,18 +112,28 @@ class EntryFilter(
     ): Int {
         var matched = 0
         for (entry in fromEntry until toEntry) {
-            if (minLevelOrdinal >= 0 && index.levels[entry] < minLevelOrdinal) continue
+            if (acceptedLevels != null) {
+                val levelOrdinal: Int = index.levels[entry].toInt()
+                if (levelOrdinal < 0) {
+                    if (!acceptUnknownLevel) continue
+                } else if (levelOrdinal >= acceptedLevels.size || !acceptedLevels[levelOrdinal]) {
+                    continue
+                }
+            }
 
             val timestamp: Long = index.timestamps[entry]
             if (timestamp < sinceMillis || timestamp > untilMillis) continue
 
-            if (acceptedCategories != null) {
-                val categoryId: Int = index.categoryIds[entry]
-                if (categoryId == LogIndex.NO_VALUE || !acceptedCategories[categoryId]) continue
-            }
+            if (facetConstraints != null && !facetsAccept(index, entry)) continue
 
             if (substringLowercase != null && text != null &&
                 !text.containsIgnoreCase(index.byteOffsets[entry], index.byteLengths[entry], substringLowercase)
+            ) {
+                continue
+            }
+
+            if (regex != null && text != null &&
+                !regex.matcher(text.decode(index.byteOffsets[entry], index.byteLengths[entry])).find()
             ) {
                 continue
             }
@@ -109,5 +142,19 @@ class EntryFilter(
             matched++
         }
         return matched
+    }
+
+    private fun facetsAccept(index: LogIndex, entry: Int): Boolean {
+        val constraints: Array<FacetConstraint?> = requireNotNull(facetConstraints)
+        for (facetIndex in constraints.indices) {
+            val constraint: FacetConstraint = constraints[facetIndex] ?: continue
+            val valueId: Int = index.facetValues[facetIndex][entry]
+            if (valueId == LogIndex.NO_VALUE) {
+                if (!constraint.acceptMissing) return false
+            } else if (valueId >= constraint.accepted.size || !constraint.accepted[valueId]) {
+                return false
+            }
+        }
+        return true
     }
 }

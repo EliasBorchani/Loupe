@@ -1,15 +1,24 @@
 package dev.loupe.core.parse
 
-import dev.loupe.core.model.LogLevel
+import dev.loupe.core.profile.CompiledProfile
+import dev.loupe.core.profile.LevelDecoder
 
 /**
- * Strategy C — hand-rolled byte scanner, no regex, no character decoding at all.
+ * A hand-written scanner for the HealthMate format: no regex, no character decoding at all.
  *
- * The floor of what the format can cost. If the regex strategies land near this, the generic
- * profile-driven engine is viable as designed; if they do not, hot profiles get compiled to a
- * scanner like this one and the declarative regex stays the fallback.
+ * This is what a *compiled* profile would look like, and it exists for two reasons. It is the
+ * benchmark floor — M0 measured 157 ns/entry against [ProfileEntryParser]'s 386, so the price of
+ * staying declarative is a known factor of 2.4, not a guess. And it is an independent second
+ * opinion: the test suite runs every case through both and requires an identical index, which
+ * catches a regex that quietly means something other than what it looks like.
+ *
+ * It is deliberately *not* wired into normal use. If a profile ever becomes a measured hot spot,
+ * this is the shape its compiled form takes.
+ *
+ * Reads facet 0 as the optional category and facet 1 as the tag, matching the order the HealthMate
+ * profile declares them in — checked at construction rather than assumed.
  */
-class ByteScannerEntryParser(zone: java.time.ZoneId = java.time.ZoneId.systemDefault()) : EntryParser {
+class ByteScannerEntryParser(override val profile: CompiledProfile) : EntryParser {
 
     companion object {
         private const val OPEN_BRACKET = '['.code.toByte()
@@ -17,13 +26,26 @@ class ByteScannerEntryParser(zone: java.time.ZoneId = java.time.ZoneId.systemDef
         private const val SPACE = ' '.code.toByte()
         private const val DASH = '-'.code.toByte()
         private const val GREATER_THAN = '>'.code.toByte()
+
+        private const val CATEGORY_FACET = 0
+        private const val TAG_FACET = 1
     }
 
-    override val name: String = "C · byte scanner"
+    override val name: String = "byte-scanner:${profile.name}"
 
-    override fun toString(): String = name
+    private val timestamps: LocalTimestampResolver = profile.timestampFormat.newResolver()
+    private val levelDecoder: LevelDecoder = requireNotNull(profile.levelDecoder) {
+        "The byte scanner implements the HealthMate format, which has a level scale"
+    }
 
-    private val timestamps = LocalTimestampResolver(zone)
+    init {
+        require(profile.facets.map { facet -> facet.name } == listOf("category", "tag")) {
+            "The byte scanner is hand-written for the HealthMate profile's facet order " +
+                "(category, tag); got ${profile.facets.map { facet -> facet.name }}"
+        }
+    }
+
+    override fun newSink(): ParsedEntry = ParsedEntry(profile.facets.size, facetsAreCharOffsets = false)
 
     override fun parseOpening(buffer: ByteArray, start: Int, end: Int, sink: ParsedEntry): Boolean {
         if (!WithingsFormat.opensEntry(buffer, start, end)) return false
@@ -38,8 +60,8 @@ class ByteScannerEntryParser(zone: java.time.ZoneId = java.time.ZoneId.systemDef
             return false
         }
 
-        val levelOrdinal: Int = LogLevel.ordinalOfSymbolByte(buffer[start + 25])
-        if (levelOrdinal == LogLevel.UNKNOWN_ORDINAL) return false
+        val levelOrdinal: Int = levelDecoder.ordinalOfSingleByte(buffer[start + 25])
+        if (levelOrdinal == LevelDecoder.UNKNOWN_ORDINAL) return false
 
         val firstTokenStart: Int = start + 29
         val firstTokenEnd: Int = indexOfClosingBracket(buffer, firstTokenStart, end)
@@ -52,30 +74,36 @@ class ByteScannerEntryParser(zone: java.time.ZoneId = java.time.ZoneId.systemDef
             val secondTokenStart: Int = afterFirst + 2
             val secondTokenEnd: Int = indexOfClosingBracket(buffer, secondTokenStart, end)
             if (secondTokenEnd >= 0 && isArrowAt(buffer, secondTokenEnd + 1, end)) {
-                sink.timestampMillis = readTimestamp(buffer, start)
-                sink.levelOrdinal = levelOrdinal
-                sink.categoryStart = firstTokenStart
-                sink.categoryEnd = firstTokenEnd
-                sink.tagStart = secondTokenStart
-                sink.tagEnd = secondTokenEnd
-                sink.messageStart = secondTokenEnd + 1 + WithingsFormat.ARROW_LENGTH
+                fill(sink, buffer, start, levelOrdinal, firstTokenStart, firstTokenEnd, secondTokenStart, secondTokenEnd)
                 return true
             }
         }
 
         if (!isArrowAt(buffer, afterFirst, end)) return false
-        sink.timestampMillis = readTimestamp(buffer, start)
-        sink.levelOrdinal = levelOrdinal
-        sink.categoryStart = ParsedEntry.ABSENT
-        sink.categoryEnd = ParsedEntry.ABSENT
-        sink.tagStart = firstTokenStart
-        sink.tagEnd = firstTokenEnd
-        sink.messageStart = afterFirst + WithingsFormat.ARROW_LENGTH
+        fill(sink, buffer, start, levelOrdinal, ParsedEntry.ABSENT, ParsedEntry.ABSENT, firstTokenStart, firstTokenEnd)
         return true
     }
 
     override fun isContinuation(buffer: ByteArray, start: Int, end: Int): Boolean =
         WithingsFormat.isContinuationLine(buffer, start, end)
+
+    private fun fill(
+        sink: ParsedEntry,
+        buffer: ByteArray,
+        start: Int,
+        levelOrdinal: Int,
+        categoryStart: Int,
+        categoryEnd: Int,
+        tagStart: Int,
+        tagEnd: Int,
+    ) {
+        sink.timestampMillis = readTimestamp(buffer, start)
+        sink.levelOrdinal = levelOrdinal
+        sink.facetStarts[CATEGORY_FACET] = categoryStart
+        sink.facetEnds[CATEGORY_FACET] = categoryEnd
+        sink.facetStarts[TAG_FACET] = tagStart
+        sink.facetEnds[TAG_FACET] = tagEnd
+    }
 
     private fun readTimestamp(buffer: ByteArray, start: Int): Long = timestamps.resolve(
         year = WithingsFormat.digitsFromBytes(buffer, start, 4),

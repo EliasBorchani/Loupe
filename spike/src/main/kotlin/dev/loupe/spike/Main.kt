@@ -4,26 +4,28 @@ import dev.loupe.core.index.EntryFilter
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
 import dev.loupe.core.io.MappedText
-import dev.loupe.core.model.LogLevel
 import dev.loupe.core.parse.ByteScannerEntryParser
 import dev.loupe.core.parse.EntryParser
-import dev.loupe.core.parse.StringRegexEntryParser
-import dev.loupe.core.parse.WidenedCharRegexEntryParser
+import dev.loupe.core.parse.ProfileEntryParser
+import dev.loupe.core.profile.CompiledProfile
+import dev.loupe.core.profile.ProfileMatch
+import dev.loupe.core.profile.ProfileRegistry
+import dev.loupe.core.query.CompiledQuery
+import dev.loupe.core.query.QueryCompiler
 import java.io.File
 import java.util.Locale
 
 /**
- * M0 — the blocking spike.
+ * The benchmark harness, kept from M0 and re-pointed at the profile-driven engine.
  *
- * One question: can a profile-driven, regex-based engine index ~5 M entries in under 5 s on the
- * JVM, or does the declarative design have to give way to hand-compiled scanners? Everything here
- * exists to answer that and nothing else.
+ * M0 asked whether a declarative regex engine could hold the indexing budget; it could, with a
+ * hardcoded parser standing in for the profile. This now runs the real thing — TOML profile,
+ * auto-detection, generic facet columns — so the answer survives the genericity that was the
+ * whole point.
  *
- * Deliberately not JMH. JMH shines on microbenchmarks it can run thousands of times; a single
- * multi-second pass over a 1 GiB file is `SingleShotTime` territory, where JMH's harness adds
- * ceremony without adding signal. Repeated in-process runs with the first one reported separately
- * show the JIT warming up just as clearly, and let the same run check that the fast strategies
- * actually agree with the slow one — which matters more than the last 2 % of timing precision.
+ * Deliberately not JMH: a single multi-second pass over a 1 GiB file is `SingleShotTime`
+ * territory, where JMH adds ceremony without adding signal, and running the strategies in one
+ * process lets the same run check that they agree.
  */
 private const val DEFAULT_FIXTURE_BYTES: Long = 1L shl 30 // 1 GiB
 private const val RUNS_PER_STRATEGY = 3
@@ -38,27 +40,40 @@ fun main(args: Array<String>) {
     println("Fixture  ${fixture.path}  ${"%.2f".format(Locale.ROOT, fixture.length() / BYTES_PER_MIB)} MiB")
     println("JVM      ${System.getProperty("java.vm.name")} ${System.getProperty("java.version")}")
     println("CPU      ${Runtime.getRuntime().availableProcessors()} cores, max heap ${Runtime.getRuntime().maxMemory() / (1L shl 20)} MiB")
+
+    val profile: CompiledProfile = detectProfile(fixture)
     println()
 
-    // Running all three in one JVM lets them cross-check each other, but it also makes `Matcher`'s
-    // `charAt` call site bimorphic (String and the custom CharSequence both flow through it), which
-    // can penalise whichever strategy the JIT does not specialise for. Pass a single letter as the
-    // second argument to measure one strategy in a clean JVM and rule that out.
+    // Running both in one JVM lets them cross-check each other, but it also makes `Matcher`'s
+    // internal call sites polymorphic. Pass a single letter as the second argument to measure one
+    // in a clean JVM — M0 found a 2× phantom slowdown that way.
     val selection: String? = args.getOrNull(1)?.uppercase(Locale.ROOT)
     val strategies: List<EntryParser> = listOfNotNull(
-        StringRegexEntryParser().takeIf { selection == null || selection == "A" },
-        WidenedCharRegexEntryParser().takeIf { selection == null || selection == "B" },
-        ByteScannerEntryParser().takeIf { selection == null || selection == "C" },
+        ProfileEntryParser(profile).takeIf { selection == null || selection == "A" },
+        ByteScannerEntryParser(profile).takeIf { selection == null || selection == "C" },
     )
-    require(strategies.isNotEmpty()) { "Unknown strategy '$selection' — expected A, B or C." }
+    require(strategies.isNotEmpty()) { "Unknown strategy '$selection' — expected A (profile) or C (byte scanner)." }
 
     val results: List<StrategyResult> = strategies.map { parser -> measureIndexing(parser, fixture) }
     printIndexingReport(results, fixture.length())
     if (results.size > 1) verifyStrategiesAgree(results)
 
-    val reference: LogIndex = results.last().index
+    val reference: LogIndex = results.first().index
     printCorpusShape(reference)
-    MappedText(fixture).use { text -> printFilterReport(reference, text) }
+    MappedText(fixture).use { text -> printQueryReport(reference, text) }
+}
+
+private fun detectProfile(fixture: File): CompiledProfile {
+    val registry: ProfileRegistry = ProfileRegistry.bundled()
+    val matches: List<ProfileMatch> = registry.detect(fixture)
+    println("Profiles ${registry.profiles.size} bundled — ${registry.profiles.joinToString { profile -> profile.name }}")
+    if (matches.isEmpty()) {
+        error("No bundled profile recognises ${fixture.name}")
+    }
+    matches.forEach { match -> println("         ${if (match === matches.first()) "→" else " "} $match") }
+    val chosen: CompiledProfile = matches.first().profile
+    chosen.warnings.forEach { warning -> println("         ! $warning") }
+    return chosen
 }
 
 private class StrategyResult(
@@ -127,15 +142,20 @@ private fun printIndexingReport(results: List<StrategyResult>, fileBytes: Long) 
     println()
     println("Index footprint (columns only, text stays in the file): ${results.first().index.estimatedHeapBytes / (1L shl 20)} MiB")
 
-    val target: Long = 5_000_000_000L
-    val scaledToFiveMillion: List<Pair<String, Double>> = results.map { result ->
-        result.name to result.warmNanos.toDouble() / result.index.entryCount * 5_000_000
+    if (results.size > 1) {
+        println()
+        println("  !! These timings ran several strategies in one JVM, which makes shared call sites")
+        println("     polymorphic and has twice now produced a phantom 2x slowdown. Trust this run for")
+        println("     the CROSS-CHECK below; for timings, re-run one strategy at a time:")
+        println("       ./gradlew :spike:run --args=\"1g A\"   and   --args=\"1g C\"")
     }
+
+    val budgetNanos: Long = 5_000_000_000L
     println()
-    println("Extrapolated to the PRD's 5 M-entry target (budget ${target / 1_000_000_000}s):")
-    scaledToFiveMillion.forEach { (name, nanos) ->
-        val verdict: String = if (nanos <= target) "PASS" else "FAIL"
-        println("  %-30s %6.2fs   %s".format(Locale.ROOT, name, nanos / 1e9, verdict))
+    println("Extrapolated to the PRD's 5 M-entry target (budget ${budgetNanos / 1_000_000_000}s):")
+    results.forEach { result ->
+        val nanos: Double = result.warmNanos.toDouble() / result.index.entryCount * 5_000_000
+        println("  %-30s %6.2fs   %s".format(Locale.ROOT, result.name, nanos / 1e9, if (nanos <= budgetNanos) "PASS" else "FAIL"))
     }
 }
 
@@ -167,8 +187,8 @@ private fun compareIndexes(reference: LogIndex, candidate: LogIndex): List<Strin
         differences.add("entryCount ${reference.entryCount} vs ${candidate.entryCount}")
         return differences
     }
-    if (reference.unparsedLineCount != candidate.unparsedLineCount) {
-        differences.add("unparsedLineCount ${reference.unparsedLineCount} vs ${candidate.unparsedLineCount}")
+    if (reference.unrecognisedLineCount != candidate.unrecognisedLineCount) {
+        differences.add("unrecognisedLineCount ${reference.unrecognisedLineCount} vs ${candidate.unrecognisedLineCount}")
     }
     for (entry in 0 until reference.entryCount) {
         if (reference.timestamps[entry] != candidate.timestamps[entry]) {
@@ -185,83 +205,91 @@ private fun compareIndexes(reference: LogIndex, candidate: LogIndex): List<Strin
             differences.add("byte range at entry $entry")
             break
         }
-        val referenceCategory: String = valueOrNone(reference, reference.categoryIds[entry])
-        val candidateCategory: String = valueOrNone(candidate, candidate.categoryIds[entry])
-        if (referenceCategory != candidateCategory) {
-            differences.add("category at entry $entry: '$referenceCategory' vs '$candidateCategory'")
-            break
+        var facetDiffers = false
+        for (facetIndex in reference.facetValues.indices) {
+            if (facetOf(reference, facetIndex, entry) != facetOf(candidate, facetIndex, entry)) {
+                differences.add(
+                    "facet '${reference.facets[facetIndex].name}' at entry $entry: " +
+                        "'${facetOf(reference, facetIndex, entry)}' vs '${facetOf(candidate, facetIndex, entry)}'",
+                )
+                facetDiffers = true
+                break
+            }
         }
-        if (reference.tags.valueOf(reference.tagIds[entry]) != candidate.tags.valueOf(candidate.tagIds[entry])) {
-            differences.add("tag at entry $entry")
-            break
-        }
+        if (facetDiffers) break
     }
     return differences
 }
 
-private fun valueOrNone(index: LogIndex, categoryId: Int): String =
-    if (categoryId == LogIndex.NO_VALUE) "<none>" else index.categories.valueOf(categoryId)
+private fun facetOf(index: LogIndex, facetIndex: Int, entry: Int): String {
+    val valueId: Int = index.facetValues[facetIndex][entry]
+    return if (valueId == LogIndex.NO_VALUE) "<none>" else index.facetDictionaries[facetIndex].valueOf(valueId)
+}
 
 private fun printCorpusShape(index: LogIndex) {
     println()
     println("─".repeat(96))
     println("CORPUS SHAPE — what the scan knows before a single line is read")
     println("─".repeat(96))
-    println("  lines            ${index.lineCount}  (${index.continuationLineCount} continuations, ${index.unparsedLineCount} unrecognised)")
+    println(
+        "  lines            ${index.lineCount}  (${index.continuationLineCount} continuations, " +
+            "${index.sectionLineCount} sections, ${index.noticeLineCount} notices, " +
+            "${index.unrecognisedLineCount} unrecognised)",
+    )
     println("  recognised       ${"%.3f".format(Locale.ROOT, index.recognisedLineRatio * 100)} %")
-    println("  distinct tags    ${index.tags.size}")
     println("  levels")
-    LogLevel.entries.forEach { level ->
-        println("      %-8s %10d".format(Locale.ROOT, level.name, index.levelCounts[level.ordinal]))
+    index.profile.levelDecoder?.labels?.forEachIndexed { ordinal, label ->
+        println("      %-10s %10d".format(Locale.ROOT, label, index.levelCounts[ordinal]))
     }
-    println("  top categories")
-    index.categories.idsByDescendingCount().take(6).forEach { id ->
-        println("      %-24s %10d".format(Locale.ROOT, index.categories.valueOf(id), index.categories.countOf(id)))
+    index.facets.forEachIndexed { facetIndex, facet ->
+        val dictionary = index.facetDictionaries[facetIndex]
+        println("  facet '${facet.name}' — ${dictionary.size} distinct values, top 6:")
+        dictionary.idsByDescendingCount().take(6).forEach { id ->
+            println("      %-24s %10d".format(Locale.ROOT, dictionary.valueOf(id), dictionary.countOf(id)))
+        }
     }
 }
 
-private fun printFilterReport(index: LogIndex, text: MappedText) {
+/** Runs the query language end to end — the same path the query bar will take. */
+private fun printQueryReport(index: LogIndex, text: MappedText) {
     println()
     println("─".repeat(96))
-    println("FILTERING — over ${index.entryCount} entries, ${Runtime.getRuntime().availableProcessors()} workers when parallel")
+    println("QUERIES — over ${index.entryCount} entries, ${Runtime.getRuntime().availableProcessors()} workers when parallel")
     println("─".repeat(96))
 
+    val compiler = QueryCompiler(index)
     val destination = IntArray(index.entryCount)
-    val syncOnly = BooleanArray(index.categories.size)
-    index.categories.idsByDescendingCount().firstOrNull()?.let { topId -> syncOnly[topId] = true }
-    val topCategoryName: String = index.categories.idsByDescendingCount().firstOrNull()
-        ?.let { id -> index.categories.valueOf(id) } ?: "?"
+    val topCategory: String = index.dictionaryOf("category")
+        ?.let { dictionary -> dictionary.idsByDescendingCount().firstOrNull()?.let(dictionary::valueOf) }
+        ?: "Sync"
 
-    val midpoint: Long = (index.minTimestampMillis + index.maxTimestampMillis) / 2
-
-    val cases: List<Pair<String, EntryFilter>> = listOf(
-        "level >= Warning" to EntryFilter(minLevelOrdinal = LogLevel.Warning.ordinal),
-        "cat:$topCategoryName" to EntryFilter(acceptedCategories = syncOnly),
-        "level>=W + cat + 1h window" to EntryFilter(
-            minLevelOrdinal = LogLevel.Warning.ordinal,
-            acceptedCategories = syncOnly,
-            sinceMillis = midpoint,
-            untilMillis = midpoint + 3_600_000L,
-        ),
-        "full text \"connected\"" to EntryFilter(substringLowercase = "connected".toByteArray()),
-        "level>=W + \"backoff\"" to EntryFilter(
-            minLevelOrdinal = LogLevel.Warning.ordinal,
-            substringLowercase = "backoff".toByteArray(),
-        ),
+    val queries: List<String> = listOf(
+        "level>=W",
+        "category:$topCategory",
+        "level>=W category:$topCategory since:-2h",
+        "\"connected\"",
+        "level>=W backoff",
+        "-category:Ui level:E",
+        "tag:~Session",
     )
 
-    println("%-32s %10s %14s %14s".format(Locale.ROOT, "query", "matches", "1 thread", "parallel"))
-    cases.forEach { (label, filter) ->
-        val sequentialMatches: Int = bestOf(FILTER_RUNS) { filter.evaluate(index, text, destination) }
+    println("%-40s %10s %14s %14s".format(Locale.ROOT, "query", "matches", "1 thread", "parallel"))
+    queries.forEach { query ->
+        val compiled: CompiledQuery = compiler.compile(query)
+        if (!compiled.isValid) {
+            println("%-40s %s".format(Locale.ROOT, query, compiled.problems.joinToString("; ")))
+            return@forEach
+        }
+        val sequentialMatches: Int = bestOf(FILTER_RUNS) { compiled.filter.evaluate(index, text, destination) }
         val sequentialMillis: Double = lastBestMillis
-        val parallelMatches: Int = bestOf(FILTER_RUNS) { filter.evaluateParallel(index, text, destination) }
+        val parallelMatches: Int = bestOf(FILTER_RUNS) { compiled.filter.evaluateParallel(index, text, destination) }
         val parallelMillis: Double = lastBestMillis
         check(sequentialMatches == parallelMatches) {
-            "'$label': parallel found $parallelMatches matches, sequential found $sequentialMatches"
+            "'$query': parallel found $parallelMatches matches, sequential found $sequentialMatches"
         }
         println(
-            "%-32s %10d %11.1f ms %11.1f ms".format(
-                Locale.ROOT, label, sequentialMatches, sequentialMillis, parallelMillis,
+            "%-40s %10d %11.1f ms %11.1f ms".format(
+                Locale.ROOT, query, sequentialMatches, sequentialMillis, parallelMillis,
             ),
         )
     }
@@ -291,7 +319,8 @@ private fun bestOf(runs: Int, block: () -> Int): Int {
 }
 
 private fun prepareFixture(targetBytes: Long): File {
-    val fixture = File("spike/fixtures/withings-${targetBytes / (1L shl 20)}MiB.log")
+    // Named like a HealthMate day file so `detect.filename` has something real to corroborate.
+    val fixture = File("spike/fixtures/${targetBytes / (1L shl 20)}MiB/2026-06-02")
     if (fixture.exists() && fixture.length() >= targetBytes * 0.98) {
         println("Fixture already present, reusing it.")
         return fixture

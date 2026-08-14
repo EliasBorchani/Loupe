@@ -63,8 +63,6 @@ label = "Tag"
 # In release builds the tag is an R8-obfuscated FQCN ("ou1"), so this facet has a very high
 # cardinality — the sidebar must render it as top-N plus a search box, never as a flat list.
 facet = "auto"
-# Surfaces report() / reportOrCrash(), which put their marker in the tag slot rather than a level.
-derive = { field = "kind", map = { ERROR = "Reported", CRASH = "Crash" } }
 
 [fields.message]
 role = "message"
