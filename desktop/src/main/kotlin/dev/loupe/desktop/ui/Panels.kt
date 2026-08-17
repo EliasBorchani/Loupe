@@ -216,7 +216,11 @@ private fun FacetValues(
             .filter { id -> search.isEmpty() || dictionary.valueOf(id).contains(search, ignoreCase = true) }
             .toList()
     }
-    val shown: List<Int> = if (searchable && search.isEmpty()) ordered.take(TOP_N) else ordered
+    val shown: List<Int> = when {
+        !searchable -> ordered
+        search.isEmpty() -> ordered.take(TOP_N)
+        else -> ordered.take(MAX_SEARCH_RESULTS)
+    }
 
     FacetGroup(
         title = if (dictionary.size > TOP_N) "${facet.label} · ${dictionary.size}" else facet.label,
@@ -269,6 +273,15 @@ private fun FacetValues(
 }
 
 private const val TOP_N = 8
+
+/**
+ * How many search results a facet shows at once.
+ *
+ * The list below is a plain `Column`, not a `LazyColumn` — for eight rows that is the right call. But
+ * typing one character used to compose *every* match, and a release build's tag facet has 817 values,
+ * so one keystroke built 817 rows. Bounded now, and the "n more" line below already says so.
+ */
+private const val MAX_SEARCH_RESULTS = 40
 
 @Composable
 private fun FacetGroup(
@@ -380,6 +393,17 @@ fun TimelineStrip(
     var dragStart by remember { mutableStateOf<Float?>(null) }
     var dragEnd by remember { mutableStateOf<Float?>(null) }
 
+    // Outside the draw lambda, and keyed on the result: this walks 900 buckets by the level count,
+    // and inside the Canvas it ran on every frame — including every frame of a drag.
+    val peak: Int = remember(results) {
+        val buckets: Array<IntArray> = results.histogram
+        val bucketCount: Int = buckets.firstOrNull()?.size ?: 0
+        (0 until bucketCount)
+            .maxOfOrNull { bucket -> (0 until levelCount).sumOf { ordinal -> buckets[ordinal][bucket] } }
+            ?.coerceAtLeast(1)
+            ?: 1
+    }
+
     Column(modifier = modifier.fillMaxWidth().background(colors.surface)) {
         Canvas(
             modifier = Modifier
@@ -447,10 +471,6 @@ fun TimelineStrip(
 
             val buckets: Array<IntArray> = results.histogram
             val bucketCount: Int = buckets.firstOrNull()?.size ?: return@Canvas
-            val peak: Int = (0 until bucketCount).maxOf { bucket ->
-                (0 until levelCount).sumOf { ordinal -> buckets[ordinal][bucket] }
-            }.coerceAtLeast(1)
-
             val barWidth: Float = size.width / bucketCount
             for (bucket in 0 until bucketCount) {
                 var drawn = 0f

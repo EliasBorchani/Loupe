@@ -146,6 +146,13 @@ the KDoc at the site; this is the index.
 
 ---
 
+**Core types are declared stable in `compose-stability.conf`.** `:core` has no Compose dependency —
+the engine must not know what a pixel is — so the compiler cannot see that an index or an open source
+is written once and then only read. Without the file, twenty composable parameters were unstable and
+their bodies re-ran whenever anything above them recomposed. One remains, `counts: IntArray`, and it
+is honest: the array really is mutable. Measure rather than assume:
+`./gradlew :desktop:compileKotlin --rerun-tasks -Pcompose.reports=true`.
+
 ## Performance budget
 
 Measured on 1 GiB / 9,013,588 entries, Apple M5 Pro, JDK 17. Full method in `docs/m0-perf-spike.md`.

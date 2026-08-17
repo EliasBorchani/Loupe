@@ -8,6 +8,23 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+composeCompiler {
+    /**
+     * Types :core exposes to composables, which the compiler cannot judge because :core has no
+     * Compose dependency. Without this, twenty parameters were unstable and the composables taking
+     * them re-ran their bodies whenever anything above them recomposed.
+     *
+     * To see the numbers rather than trust them:
+     *
+     *     ./gradlew :desktop:compileKotlin --rerun-tasks \
+     *       -Pcompose.reports=true      # then read desktop/build/compose-reports/
+     */
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+    if (providers.gradleProperty("compose.reports").isPresent) {
+        reportsDestination.set(layout.buildDirectory.dir("compose-reports"))
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     // currentOs brings the runtime, ui and foundation for this machine's platform.
