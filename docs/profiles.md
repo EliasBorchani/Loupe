@@ -127,6 +127,11 @@ min_match = 0.80           # below this, the profile declines rather than guessi
 Nothing is ever detected silently: the app shows which profile it chose and its score, and you can
 override it.
 
+**A profile paired with a source adapter does not take part in any of this.** The adapter wrote the
+text, so it names the profile that reads it — which is why `android-studio-logcat` and `json-lines`
+carry no `priority`, and why a plain log merely *shaped* like a converted one is never captured by
+them.
+
 ## When it does not work
 
 The status bar shows `40 168 / 41 087 lines recognised — why?`. **Click it.** The panel groups the
@@ -172,7 +177,31 @@ Two ship today:
 
 Adding a third is a deliberate act: an adapter claims that a whole file format is worth supporting,
 which is a bigger promise than a profile makes. It is also the pattern `.gz` and `.zip` will want,
-being containers in exactly the same sense.
+being containers in exactly the same sense — and those emit whatever was inside the archive, so they
+will be plain `SourceAdapter`s with no shape and ordinary detection.
+
+### The canonical converted line
+
+Both adapters above write one shape:
+
+```
+<timestamp:23> <columns> <message>
+                       a message's own newlines, indented to the timestamp width
+```
+
+| Adapter | Columns |
+|---|---|
+| `android-studio-logcat` | `pid` `tid` `level` `[tag]` `[process]` |
+| `json-lines` | `[level]` `[context]` |
+
+Two facts matter if you read those two files. **The layout is declared in Kotlin**, in
+`core/source/CanonicalLine.kt`, and their `regex`, `opens` and `continues` are *derived* from it —
+`AdapterProfilePairingTest` fails the build if the shipped file and the declaration disagree, and
+prints the derived string so the fix is a paste. **The meaning is still in the TOML**: labels, level
+order, facet modes, and every comment. That is why they read and edit like any other profile.
+
+Copying one through *Profiles → New from Template* is unaffected: the copy is renamed, and a renamed
+profile competes on detection like any other.
 
 ### Why JSON lines is an adapter and not a profile
 

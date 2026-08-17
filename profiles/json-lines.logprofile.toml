@@ -10,8 +10,7 @@
 
 name        = "json-lines"
 description = "JSON lines / NDJSON, converted to text"
-# Below android-studio-logcat, which shares the timestamp shape and is the more specific format.
-priority    = 44
+# No priority: this profile is named by JsonLinesAdapter, not detected. See docs/profiles.md.
 
 [detect]
 sample    = 200

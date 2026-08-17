@@ -97,6 +97,16 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
 
     operator fun plus(other: ProfileRegistry): ProfileRegistry = ProfileRegistry(profiles + other.profiles)
 
+    /**
+     * The same registry without [names] — the profiles a source adapter has already spoken for.
+     *
+     * Those describe text Loupe writes itself, so scoring them against an ordinary file is at best a
+     * waste of a pass and at worst a mis-detection: a plain log merely *shaped* like a converted one
+     * would be read by a profile intended for something else.
+     */
+    fun excluding(names: Set<String>): ProfileRegistry =
+        ProfileRegistry(profiles.filter { profile -> profile.name !in names })
+
     /** @return every candidate that cleared its own `min_match`, best first. Empty if none did. */
     fun detect(file: File): List<ProfileMatch> = profiles
         .map { profile -> score(profile, file) }

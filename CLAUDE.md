@@ -25,6 +25,12 @@ the code, README and profiles are English.
 `generateProfileIndex` writes `/profiles/index.txt` so `ProfileRegistry.bundled()` can enumerate
 them from inside a jar. It is generated, never hand-edited.
 
+**A profile paired with an adapter is pinned, not detected.** The adapter wrote the text, so it
+names the profile that reads it (`CanonicalSourceAdapter.emittedProfileName`), and those profiles are
+excluded from scoring. Two of them competing used to be settled by hand-written `priority` values.
+Their layout is declared once in `CanonicalLine` and their regexes derived from it — writer and
+profile are two halves of one format, and `AdapterProfilePairingTest` holds them together.
+
 **A profile describes lines; JSON is not lines you can regex.** An Android Studio `.logcat` export
 is one JSON document holding every message; NDJSON is one object per line, which *looks* regexable
 but would leave `\"` and `\/` in the message — nothing downstream unescapes — and would make the

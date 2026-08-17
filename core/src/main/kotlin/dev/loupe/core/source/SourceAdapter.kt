@@ -119,6 +119,16 @@ object SourceAdapters {
      * KDocs and encoded a third time as the order of [all]; it is a check and a test now, and the
      * order carries no meaning.
      */
+    /**
+     * Profiles an adapter has spoken for. Kept out of detection — see [ProfileRegistry.excluding].
+     *
+     * Derived from the adapters rather than listed, because a name written in two places is a name
+     * that will disagree with itself.
+     */
+    val pairedProfileNames: Set<String> = all.filterIsInstance<CanonicalSourceAdapter>()
+        .map { adapter -> adapter.emittedProfileName }
+        .toSet()
+
     fun claiming(file: File): SourceAdapter? {
         val claimants: List<SourceAdapter> = all.filter { adapter -> adapter.claims(file) }
         require(claimants.size <= 1) {

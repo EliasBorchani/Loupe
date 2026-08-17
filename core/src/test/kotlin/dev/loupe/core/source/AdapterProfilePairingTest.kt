@@ -7,6 +7,8 @@ import dev.loupe.core.profile.ProfileRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneOffset
@@ -23,6 +25,9 @@ import java.time.ZoneOffset
  * A failure prints the derived string, so the fix is a paste.
  */
 class AdapterProfilePairingTest {
+
+    @TempDir
+    lateinit var folder: File
 
     companion object {
         private val PAIRED: List<CanonicalSourceAdapter> = SourceAdapters.all.filterIsInstance<CanonicalSourceAdapter>()
@@ -111,6 +116,48 @@ class AdapterProfilePairingTest {
                 "${adapter.emittedProfileName}: the writer can emit ${writable - declared.toSet()}, which the profile does not declare",
             )
         }
+    }
+
+    @Test
+    fun `a paired profile declares no priority`() {
+        PAIRED.forEach { adapter ->
+            // Given / When / Then — priority is a tie-break between profiles competing on detection.
+            // A paired profile is named by its adapter and never enters that race, so a priority here
+            // would be reasoning about something that no longer happens.
+            assertEquals(0, specOf(adapter.emittedProfileName).priority, adapter.emittedProfileName)
+        }
+    }
+
+    @Test
+    fun `a profile an adapter speaks for is kept out of detection`() {
+        // Given — plain text that happens to be shaped exactly like the NDJSON adapter's output. It
+        // is not a converted file, so the profile that describes converted files must not claim it.
+        val lookalike = File(folder, "lookalike.log")
+        lookalike.writeText(
+            (0..9).joinToString("\n", postfix = "\n") { minute ->
+                "2026-08-13 17:2%d:15.293 [DEBUG] [general] a line that only looks converted".format(minute)
+            },
+        )
+
+        // When
+        LogSourceLoader.open(listOf(lookalike)).use { source ->
+            // Then — before pinning, `json-lines` would have scored 1.0 on this and won.
+            assertEquals("generic-timestamped", source.profile.name)
+            assertTrue(source.converted.isEmpty(), "nothing was converted, so nothing should say it was")
+        }
+    }
+
+    @Test
+    fun `the paired profiles are exactly the ones excluded from detection`() {
+        // Given / When / Then — derived from the adapters, so the two cannot disagree.
+        assertEquals(
+            PAIRED.map { adapter -> adapter.emittedProfileName }.toSet(),
+            SourceAdapters.pairedProfileNames,
+        )
+        assertEquals(
+            ProfileRegistry.bundled().profiles.size - PAIRED.size,
+            ProfileRegistry.bundled().excluding(SourceAdapters.pairedProfileNames).profiles.size,
+        )
     }
 
     @Test

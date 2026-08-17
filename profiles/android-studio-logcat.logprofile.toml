@@ -12,8 +12,8 @@
 
 name        = "android-studio-logcat"
 description = "Android Studio .logcat export (JSON), converted to text"
-# Above android-logcat: both could plausibly score on a converted file, and this one is exact.
-priority    = 45
+# No priority: AndroidStudioLogcatAdapter and JsonLinesAdapter name the profile that reads their
+# output, so these two never compete on detection. See docs/profiles.md.
 
 [detect]
 sample    = 200

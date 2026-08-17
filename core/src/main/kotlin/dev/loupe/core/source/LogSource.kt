@@ -66,8 +66,9 @@ enum class OpenPhase { Converting, Detecting, Indexing, Merging }
  *     so nothing here may filter on one.
  *  2. **Convert** anything that is a container rather than lines — an Android Studio `.logcat`
  *     export is one JSON document, and no profile can ever describe that. See [SourceAdapter].
- *  3. **Detect on the largest file.** Scoring every file first would be honest but slow, and the
- *     biggest file is the most representative sample of what the folder is.
+ *  3. **Detect on the largest file** — unless it was converted, in which case the adapter *names*
+ *     the profile that reads its own output rather than letting it compete. Scoring every file
+ *     first would be honest but slow, and the biggest file is the most representative sample.
  *  4. **Re-score the others against the winner.** A file the chosen profile does not recognise is
  *     reported as skipped, never silently indexed into garbage.
  *  5. **Index, then merge.** Each file is indexed independently, then k-way merged by timestamp.
@@ -93,8 +94,7 @@ object LogSourceLoader {
         progress?.report(OpenPhase.Detecting, 0, totalBytes)
 
         val largest: PreparedFile = prepared.files.maxBy { file -> file.readable.length() }
-        val detection: ProfileMatch = registry.best(largest.readable)
-            ?: throw NoMatchingProfileException(largest.original, registry.profiles.map { profile -> profile.name })
+        val detection: ProfileMatch = detectOrPin(registry, largest)
         val profile: CompiledProfile = detection.profile
 
         val accepted: MutableList<PreparedFile> = mutableListOf()
@@ -144,6 +144,40 @@ object LogSourceLoader {
     }
 
     /**
+     * The profile for the file the rest of the folder will be scored against.
+     *
+     * A file a [CanonicalSourceAdapter] converted is **pinned, not detected**: that adapter wrote the
+     * text, so it knows which profile reads it. Two adapter-emitted profiles competing on score used
+     * to be settled by hand-written `priority` values in the TOMLs — a race neither of them should
+     * have been in.
+     *
+     * It is still scored, because a pass that skipped scoring would hide the one failure this can
+     * have: a writer that drifted from its profile. That gets its own message rather than falling
+     * through to whichever other profile happens to match the output best.
+     */
+    private fun detectOrPin(registry: ProfileRegistry, file: PreparedFile): ProfileMatch {
+        val adapter: CanonicalSourceAdapter = file.adapter as? CanonicalSourceAdapter
+            ?: return detectAmongOpenProfiles(registry, file)
+
+        val pinned: ProfileRegistry = ProfileRegistry(
+            registry.profiles.filter { profile -> profile.name == adapter.emittedProfileName },
+        )
+        require(pinned.profiles.isNotEmpty()) {
+            "${adapter.name} needs the '${adapter.emittedProfileName}' profile, which is not in this registry."
+        }
+        return pinned.best(file.readable) ?: throw IllegalStateException(
+            "${adapter.name} converted '${file.original.name}', but '${adapter.emittedProfileName}' does not " +
+                "recognise the result — the writer and its profile have drifted apart.",
+        )
+    }
+
+    private fun detectAmongOpenProfiles(registry: ProfileRegistry, file: PreparedFile): ProfileMatch {
+        val open: ProfileRegistry = registry.excluding(SourceAdapters.pairedProfileNames)
+        return open.best(file.readable)
+            ?: throw NoMatchingProfileException(file.original, open.profiles.map { profile -> profile.name })
+    }
+
+    /**
      * Renders any container into indexable text, leaving everything else alone.
      *
      * The rendered file takes the original's **name** inside a temporary directory, so the `file`
@@ -153,7 +187,7 @@ object LogSourceLoader {
     private fun prepare(candidates: List<File>, progress: OpenProgress?): Prepared {
         val adapters: List<SourceAdapter?> = candidates.map { file -> SourceAdapters.claiming(file) }
         if (adapters.all { adapter -> adapter == null }) {
-            return Prepared(candidates.map { file -> PreparedFile(file, file) }, emptyList(), null)
+            return Prepared(candidates.map { file -> PreparedFile(file, file, adapter = null) }, emptyList(), null)
         }
 
         val directory: File = Files.createTempDirectory("loupe-converted").toFile()
@@ -164,12 +198,12 @@ object LogSourceLoader {
             val adapter: SourceAdapter? = adapters[position]
             bytesDone += file.length()
             if (adapter == null) {
-                PreparedFile(file, file)
+                PreparedFile(file, file, adapter = null)
             } else {
                 progress?.report(OpenPhase.Converting, bytesDone, totalBytes)
                 val destination = File(directory, file.name)
                 converted.add(ConvertedSource(file, adapter.name, adapter.convert(file, destination)))
-                PreparedFile(file, destination)
+                PreparedFile(file, destination, adapter)
             }
         }
         return Prepared(files, converted, directory)
@@ -205,7 +239,7 @@ object LogSourceLoader {
     }.filter { file -> file.canRead() && file.length() > 0 && !file.name.startsWith(".") }
 
     /** What the user chose, and what the indexer will actually read. The same file, unless converted. */
-    private class PreparedFile(val original: File, val readable: File)
+    private class PreparedFile(val original: File, val readable: File, val adapter: SourceAdapter?)
 
     private class Prepared(
         val files: List<PreparedFile>,
