@@ -141,7 +141,7 @@ class MergedSourceTest {
 
         // When / Then — the message has to name a way forward, not just fail.
         val failure = assertThrows(NoMatchingProfileException::class.java) { LogSourceLoader.open(listOf(folder)) }
-        assertTrue(failure.message!!.contains("~/.loupe/profiles/"), failure.message)
+        assertTrue(failure.message!!.contains(".loupe/profiles"), failure.message)
     }
 
     @Test

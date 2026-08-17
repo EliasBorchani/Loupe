@@ -659,6 +659,7 @@ fun StatusBar(
     catchingUp: Boolean,
     selectionSize: Int,
     notice: String?,
+    hasProfileProblems: Boolean,
     viewMode: ViewMode,
     onViewModeChange: (ViewMode) -> Unit,
     onShowParseReport: () -> Unit,
@@ -686,8 +687,19 @@ fun StatusBar(
                     "${COUNT_FORMAT.format(index.lineCount)} lines recognised — why?"
             },
             style = LoupeTheme.type.uiSmall.copy(color = if (recognised >= 1.0) colors.accentInk else colors.warn),
-            modifier = if (recognised >= 1.0) Modifier else Modifier.clickable(onClick = onShowParseReport),
+            modifier = if (recognised >= 1.0 && !hasProfileProblems) {
+                Modifier
+            } else {
+                Modifier.clickable(onClick = onShowParseReport)
+            },
         )
+        if (hasProfileProblems) {
+            BasicText(
+                text = "⚠ a profile failed to load",
+                style = LoupeTheme.type.uiSmall.copy(color = colors.error),
+                modifier = Modifier.clickable(onClick = onShowParseReport),
+            )
+        }
         BasicText(
             text = "${COUNT_FORMAT.format(index.continuationLineCount)} folded",
             style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
@@ -750,6 +762,7 @@ private fun ViewModeToggle(mode: ViewMode, onChange: (ViewMode) -> Unit) {
 fun ParseReportPane(
     report: UnrecognisedReport,
     totalLines: Long,
+    profileProblems: List<String>,
     fileNameOf: (Int) -> String,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -779,6 +792,20 @@ fun ParseReportPane(
         )
 
         Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+            // A profile that would not load is a likelier explanation than anything below it.
+            if (profileProblems.isNotEmpty()) {
+                BasicText(
+                    text = "${profileProblems.size} profile(s) in ~/.loupe/profiles/ failed to load:",
+                    style = LoupeTheme.type.uiSmall.copy(color = colors.error, fontWeight = FontWeight.SemiBold),
+                )
+                profileProblems.forEach { problem ->
+                    BasicText(
+                        text = problem,
+                        style = LoupeTheme.type.monoSmall.copy(color = colors.error),
+                        modifier = Modifier.padding(bottom = Spacing.tiny),
+                    )
+                }
+            }
             report.kindsByCount().forEach { kind ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = Spacing.small),

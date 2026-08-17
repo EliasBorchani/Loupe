@@ -18,7 +18,8 @@ Ticking a facet writes into the query bar rather than into a hidden selection mo
 is learned by using it. Formats are described by **declarative profiles** you can commit next to
 your code, so a whole team shares one viewer that understands their logs. Four ship with it —
 Withings HealthMate, Android logcat, BSD syslog, and a catch-all for anything with an ISO-8601
-timestamp — and the one that best describes your file is picked by score, never silently.
+timestamp — and the one that best describes your file is picked by score, never silently. Drop your
+own in `~/.loupe/profiles/`: **[how to write one](docs/profiles.md)**.
 
 ```toml
 [entry]
@@ -63,7 +64,7 @@ the numbers that did *not* meet target on the first attempt:
 
 ```bash
 ./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
-./gradlew test                           # 121 tests
+./gradlew test                           # 127 tests
 ./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
 ./gradlew :desktop:packageDmg            # unsigned .dmg
 ```

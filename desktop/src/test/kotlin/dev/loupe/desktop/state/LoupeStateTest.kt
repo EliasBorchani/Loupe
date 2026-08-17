@@ -467,7 +467,7 @@ class LoupeStateTest {
         }
 
         // Then
-        assertTrue(failure.message.contains("~/.loupe/profiles/"), failure.message)
+        assertTrue(failure.message.contains(".loupe/profiles"), failure.message)
     }
 
     private fun entryWithMessage(message: String): Int {

@@ -91,6 +91,28 @@ c'est une ligne à changer si `loupe.dev` est un jour acquis.
 
 ---
 
+## Les profils tiers étaient promis, pas branchés
+
+`ProfileRegistry.fromDirectory` existait depuis le M1 et **personne ne l'appelait**. Pire, le
+message d'erreur quand aucun profil ne reconnaît un fichier disait déjà « Add one to
+`~/.loupe/profiles/` and reopen » — il promettait une fonctionnalité inexistante.
+
+C'est branché : `~/.loupe/profiles/*.logprofile.toml`, relu **à chaque ouverture** pour qu'écrire un
+profil ne demande pas de redémarrage — c'est tout le déroulé quand on en écrit un pour un format que
+personne n'a décrit.
+
+Deux décisions de conception :
+
+- **`core` ne lit jamais le répertoire personnel, l'app oui.** `LogSourceLoader` prend par défaut le
+  registre embarqué, et `LoupeState` lui passe `bundledPlusUser()`. Sinon chaque test dépendrait
+  silencieusement de ce qui traîne dans `~/.loupe/profiles` sur la machine qui l'exécute.
+- **Un profil cassé est signalé, jamais fatal.** Quelqu'un qui en écrit un a une erreur de syntaxe
+  une fois sur deux ; refuser d'ouvrir quoi que ce soit casserait exactement la tâche que la
+  fonctionnalité sert. Les échecs remontent dans le panneau de diagnostic, à côté des lignes non
+  reconnues — c'est le même « pourquoi ça ne marche pas ».
+
+La documentation publique du format est dans [`profiles.md`](profiles.md).
+
 ## Reste
 
 **La notarisation Apple.** Elle demande un compte Apple Developer, un certificat *Developer ID

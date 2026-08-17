@@ -8,7 +8,7 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0 – M4 done.** 121 tests, `main`, no remote yet. Docs in `docs/` (French);
+**State: M0 – M4 done.** 127 tests, `main`, no remote yet. Docs in `docs/` (French);
 the code, README and profiles are English.
 
 ---
@@ -68,6 +68,11 @@ the KDoc at the site; this is the index.
   in the line and calls it a number.
 - **`generic-timestamped` has priority 0 and min_match 0.90.** Detection sorts by score and breaks
   ties on priority, which is the only reason a catch-all can be shipped at all.
+- **`core` never reads the home directory; the app does.** `LogSourceLoader` defaults to the bundled
+  registry, and `LoupeState` passes `bundledPlusUser()`. Otherwise every test would silently depend
+  on what happens to sit in `~/.loupe/profiles` on the machine running it.
+- **A broken user profile is reported, never fatal.** Someone writing one has a syntax error in it
+  half the time, and refusing to open anything would break the exact task the feature exists for.
 
 **Semantics**
 - **`entry.continues` is exact; `entry.opens` is a *necessary condition only*.** The parse regex runs
@@ -135,7 +140,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 121 tests, all three modules
+./gradlew test                                   # 127 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg
 ./gradlew build                                  # must be warning-free
@@ -157,7 +162,8 @@ recognise, so it exercises the merge and the skip path.
 | `docs/m2-ui.md` | The three UI forks, decided, and what the screen deliberately does not do. |
 | `docs/m3-product.md` | Selection, keyboard, context and export — and why the clipboard is capped. |
 | `docs/m4-public.md` | The four bundled profiles, the two bugs they found, and why there is no JSON one. |
-| `profiles/withings.logprofile.toml` | The reference profile, heavily commented — the format's spec. |
+| `docs/profiles.md` | How to write a profile. The public-facing one; English. |
+| `profiles/withings.logprofile.toml` | The reference profile, heavily commented. |
 
 ---
 

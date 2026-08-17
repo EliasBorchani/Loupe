@@ -9,6 +9,7 @@ import dev.loupe.core.query.QueryCompiler
 import dev.loupe.core.query.QueryEdits
 import dev.loupe.core.source.EntryExport
 import dev.loupe.core.source.LogSource
+import dev.loupe.core.profile.ProfileRegistry
 import dev.loupe.core.source.LogSourceLoader
 import dev.loupe.core.source.OpenPhase
 import kotlinx.coroutines.CoroutineScope
@@ -182,7 +183,9 @@ class LoupeState(private val scope: CoroutineScope) {
             _expandedEntries.value = emptySet()
             try {
                 val opened: LogSource = withContext(Dispatchers.IO) {
-                    LogSourceLoader.open(paths) { phase, done, total ->
+                    // Re-read on every open, so editing a profile needs no restart — which is the
+                    // whole workflow when writing one for a format nobody has described yet.
+                    LogSourceLoader.open(paths, ProfileRegistry.bundledPlusUser()) { phase, done, total ->
                         _status.value = OpenStatus.Working(phase, done, total)
                     }
                 }

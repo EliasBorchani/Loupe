@@ -252,6 +252,7 @@ private fun Loaded(
                 ParseReportPane(
                     report = source.index.unrecognised,
                     totalLines = source.index.lineCount,
+                    profileProblems = source.profileProblems,
                     fileNameOf = { fileId -> source.files.getOrNull(fileId)?.name ?: "?" },
                     onClose = { state.showParseReport(false) },
                 )
@@ -276,6 +277,7 @@ private fun Loaded(
             catchingUp = catchingUp,
             selectionSize = selection?.size ?: 0,
             notice = notice,
+            hasProfileProblems = source.profileProblems.isNotEmpty(),
             viewMode = viewMode,
             onViewModeChange = state::setViewMode,
             onShowParseReport = { state.showParseReport(true) },

@@ -7,6 +7,7 @@ import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
 import dev.loupe.core.profile.ProfileMatch
+import dev.loupe.core.profile.LoadedRegistry
 import dev.loupe.core.profile.ProfileRegistry
 import java.io.Closeable
 import java.io.File
@@ -26,6 +27,8 @@ class LogSource(
     val files: List<File>,
     /** Files that were passed in but that the chosen profile does not recognise. */
     val skipped: List<SkippedFile>,
+    /** User profiles that failed to load. Reported, never fatal. */
+    val profileProblems: List<String>,
     val elapsedMillis: Long,
 ) : Closeable {
 
@@ -60,9 +63,10 @@ object LogSourceLoader {
 
     fun open(
         paths: List<File>,
-        registry: ProfileRegistry = ProfileRegistry.bundled(),
+        loaded: LoadedRegistry = LoadedRegistry(ProfileRegistry.bundled(), emptyList()),
         progress: OpenProgress? = null,
     ): LogSource {
+        val registry: ProfileRegistry = loaded.registry
         val startedAt: Long = System.nanoTime()
         val candidates: List<File> = expand(paths)
         require(candidates.isNotEmpty()) { "No readable file in ${paths.joinToString { path -> path.name }}" }
@@ -114,6 +118,7 @@ object LogSourceLoader {
             detection = detection,
             files = accepted,
             skipped = skipped,
+            profileProblems = loaded.problems,
             elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000,
         )
     }
@@ -130,5 +135,6 @@ object LogSourceLoader {
 
 class NoMatchingProfileException(file: File, profileNames: List<String>) : IllegalArgumentException(
     "No profile recognises '${file.name}'. Tried: ${profileNames.joinToString(", ")}. " +
-        "Add one to ~/.loupe/profiles/ and reopen.",
+        "Write one and drop it in ${ProfileRegistry.userDirectory()} — it is read on every open, " +
+        "so you can edit it and reopen the file without restarting.",
 )

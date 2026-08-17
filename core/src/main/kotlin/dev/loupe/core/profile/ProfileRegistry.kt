@@ -40,7 +40,38 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
             return ProfileRegistry(loaded)
         }
 
-        /** Profiles the user dropped in `~/.loupe/profiles/`, which override nothing but add to the set. */
+        /** Where a user drops their own profiles. Read on every open, so editing one needs no restart. */
+        fun userDirectory(): File = File(System.getProperty("user.home"), ".loupe/profiles")
+
+        /**
+         * The bundled profiles plus whatever is in [directory].
+         *
+         * **A broken user profile must not stop the app opening a file.** Someone iterating on a
+         * new format will have a syntax error in it half the time, and refusing to launch would
+         * make the tool useless for exactly the task it is meant to support. Each failure is
+         * collected and surfaced instead.
+         */
+        fun bundledPlusUser(directory: File = userDirectory()): LoadedRegistry {
+            val bundled: ProfileRegistry = bundled()
+            if (!directory.isDirectory) return LoadedRegistry(bundled, emptyList())
+
+            val loaded: MutableList<CompiledProfile> = mutableListOf()
+            val problems: MutableList<String> = mutableListOf()
+            directory.listFiles()
+                .orEmpty()
+                .filter { file -> file.isFile && file.name.endsWith(PROFILE_EXTENSION) }
+                .sortedBy { file -> file.name }
+                .forEach { file ->
+                    try {
+                        loaded.add(CompiledProfile.load(file))
+                    } catch (failure: IllegalArgumentException) {
+                        problems.add("${file.name}: ${failure.message}")
+                    }
+                }
+            return LoadedRegistry(ProfileRegistry(bundled.profiles + loaded), problems)
+        }
+
+        /** Profiles the user dropped in a directory. Throws on the first bad one. */
         fun fromDirectory(directory: File): ProfileRegistry {
             val loaded: List<CompiledProfile> = directory.listFiles()
                 .orEmpty()
@@ -107,6 +138,9 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
 
     private object SampleComplete : RuntimeException(null, null, false, false)
 }
+
+/** A registry, plus whatever refused to load on the way. */
+class LoadedRegistry(val registry: ProfileRegistry, val problems: List<String>)
 
 class ProfileMatch(
     val profile: CompiledProfile,
