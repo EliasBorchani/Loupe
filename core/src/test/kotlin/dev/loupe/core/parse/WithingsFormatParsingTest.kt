@@ -4,7 +4,10 @@ import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
 import dev.loupe.core.io.TextSources
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.ProfileRegistry
+import dev.loupe.core.testing.BundledProfile
+import dev.loupe.core.testing.WITHINGS_INDENT
+import dev.loupe.core.testing.facetOf
+import dev.loupe.core.testing.writeLog
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,11 +27,9 @@ import java.io.File
 class WithingsFormatParsingTest {
 
     companion object {
-        private const val INDENT = "                       " // 23 spaces
 
         /** The bundled profile, parsed straight from the jar resource the app will ship. */
-        val WITHINGS: CompiledProfile = ProfileRegistry.bundled().profiles
-            .single { profile -> profile.name == "withings-healthmate" }
+        val WITHINGS: CompiledProfile = BundledProfile.withings
 
         @JvmStatic
         fun parsers(): List<EntryParser> = listOf(
@@ -63,8 +64,8 @@ class WithingsFormatParsingTest {
         // Then
         assertEquals(1, index.entryCount)
         assertEquals(1, index.levels[0].toInt()) // Debug, second on the V D I W E scale
-        assertEquals("Sync", facetValue(index, "category", 0))
-        assertEquals("tag", facetValue(index, "tag", 0))
+        assertEquals("Sync", facetOf(index, "category", 0))
+        assertEquals("tag", facetOf(index, "tag", 0))
         assertEquals(0L, index.unrecognisedLineCount)
     }
 
@@ -79,8 +80,8 @@ class WithingsFormatParsingTest {
 
         // Then
         assertEquals(1, index.entryCount)
-        assertEquals(null, facetValue(index, "category", 0))
-        assertEquals("ou1", facetValue(index, "tag", 0))
+        assertEquals(null, facetOf(index, "category", 0))
+        assertEquals("ou1", facetOf(index, "tag", 0))
     }
 
     @ParameterizedTest(name = "{0}")
@@ -97,10 +98,10 @@ class WithingsFormatParsingTest {
 
         // Then
         assertEquals(2, index.entryCount)
-        assertEquals(null, facetValue(index, "category", 0))
-        assertEquals(null, facetValue(index, "category", 1))
-        assertEquals("ERROR", facetValue(index, "tag", 0))
-        assertEquals("CRASH", facetValue(index, "tag", 1))
+        assertEquals(null, facetOf(index, "category", 0))
+        assertEquals(null, facetOf(index, "category", 1))
+        assertEquals("ERROR", facetOf(index, "tag", 0))
+        assertEquals("CRASH", facetOf(index, "tag", 1))
         assertEquals(0L, index.unrecognisedLineCount)
     }
 
@@ -115,8 +116,8 @@ class WithingsFormatParsingTest {
         val index: LogIndex = LogIndexer(parser).index(file)
 
         // Then
-        assertEquals("AggregateComputation", facetValue(index, "category", 0))
-        assertEquals("ComputeAggregateForDay", facetValue(index, "tag", 0))
+        assertEquals("AggregateComputation", facetOf(index, "category", 0))
+        assertEquals("ComputeAggregateForDay", facetOf(index, "tag", 0))
         assertTrue(readEntry(file, index, 0).endsWith(message)) { "the whole message must survive the split" }
     }
 
@@ -130,8 +131,8 @@ class WithingsFormatParsingTest {
         val index: LogIndex = LogIndexer(parser).index(file)
 
         // Then
-        assertEquals("Sync", facetValue(index, "category", 0))
-        assertEquals("PullVasistas", facetValue(index, "tag", 0))
+        assertEquals("Sync", facetOf(index, "category", 0))
+        assertEquals("PullVasistas", facetOf(index, "tag", 0))
     }
 
     @ParameterizedTest(name = "{0}")
@@ -154,8 +155,8 @@ class WithingsFormatParsingTest {
         // Given
         val file = write(
             "2026-07-22 12:00:00.000 [D] [Sync] [tag] -> first",
-            "${INDENT}second",
-            "${INDENT}third",
+            "${WITHINGS_INDENT}second",
+            "${WITHINGS_INDENT}third",
             "2026-07-22 12:00:01.000 [D] [Sync] [tag] -> next entry",
         )
 
@@ -167,7 +168,7 @@ class WithingsFormatParsingTest {
         assertEquals(2L, index.continuationLineCount)
         assertEquals(0L, index.unrecognisedLineCount)
         assertEquals(
-            "2026-07-22 12:00:00.000 [D] [Sync] [tag] -> first\n${INDENT}second\n${INDENT}third",
+            "2026-07-22 12:00:00.000 [D] [Sync] [tag] -> first\n${WITHINGS_INDENT}second\n${WITHINGS_INDENT}third",
             readEntry(file, index, 0),
         )
     }
@@ -178,8 +179,8 @@ class WithingsFormatParsingTest {
         // Given
         val file = write(
             "2026-07-22 12:00:00.000 [E] [Sync] [tag] -> boom",
-            "${INDENT}java.lang.IllegalStateException: nope",
-            "$INDENT\tat com.withings.Boom.explode(Boom.kt:42)",
+            "${WITHINGS_INDENT}java.lang.IllegalStateException: nope",
+            "$WITHINGS_INDENT\tat com.withings.Boom.explode(Boom.kt:42)",
             "2026-07-22 12:00:02.000 [D] [Sync] [tag] -> carrying on",
         )
 
@@ -226,8 +227,8 @@ class WithingsFormatParsingTest {
         val index: LogIndex = LogIndexer(parser).index(file)
 
         // Then
-        assertEquals("Résumé", facetValue(index, "tag", 0))
-        assertEquals("Résumé", facetValue(index, "tag", 1))
+        assertEquals("Résumé", facetOf(index, "tag", 0))
+        assertEquals("Résumé", facetOf(index, "tag", 1))
         assertEquals(1, index.dictionaryOf("tag")?.size) { "the same value must intern to one id" }
     }
 
@@ -238,11 +239,11 @@ class WithingsFormatParsingTest {
             "2026-07-22 10:00:00.000 [V] [Wpp] [c.w.w.Session] -> frame in",
             "2026-07-22 10:00:00.100 [D] [ou1] -> no category",
             "2026-07-22 10:00:00.200 [E] [ERROR] -> Reported error",
-            "${INDENT}java.lang.IllegalStateException: nope",
+            "${WITHINGS_INDENT}java.lang.IllegalStateException: nope",
             "2026-07-22 10:00:00.300 [I] [Sync] [Pull] -> steps: 100 -> 250",
             "=== separator ===",
             "2026-07-22 10:00:00.400 [W] [Sync] [Pull] -> [abc] retry — accentué",
-            "${INDENT}second line",
+            "${WITHINGS_INDENT}second line",
         )
 
         // When
@@ -260,26 +261,17 @@ class WithingsFormatParsingTest {
                 assertEquals(reference.levels[entry], candidate.levels[entry], "level at $entry")
                 assertEquals(reference.byteOffsets[entry], candidate.byteOffsets[entry], "offset at $entry")
                 assertEquals(reference.byteLengths[entry], candidate.byteLengths[entry], "length at $entry")
-                assertEquals(facetValue(reference, "category", entry), facetValue(candidate, "category", entry), "category at $entry")
-                assertEquals(facetValue(reference, "tag", entry), facetValue(candidate, "tag", entry), "tag at $entry")
+                assertEquals(facetOf(reference, "category", entry), facetOf(candidate, "category", entry), "category at $entry")
+                assertEquals(facetOf(reference, "tag", entry), facetOf(candidate, "tag", entry), "tag at $entry")
             }
         }
     }
 
     /** @return the facet's value for an entry, or `null` when the group did not participate. */
-    private fun facetValue(index: LogIndex, facetName: String, entry: Int): String? {
-        val facetIndex: Int = index.facetIndexOf(facetName)
-        val valueId: Int = index.facetValues[facetIndex][entry]
-        return if (valueId == LogIndex.NO_VALUE) null else index.facetDictionaries[facetIndex].valueOf(valueId)
-    }
-
     /** Reads an entry back through the same `(offset, length)` path the UI would use. */
     private fun readEntry(file: File, index: LogIndex, entry: Int): String =
         TextSources.of(file).use { text -> text.decode(0, index.byteOffsets[entry], index.byteLengths[entry]) }
 
-    private fun write(vararg lines: String): File {
-        val file = File(temporaryDirectory, "2026-07-22")
-        file.writeText(lines.joinToString("\n", postfix = "\n"))
-        return file
-    }
+    /** The fixed name matters: the profile's `detect.filename` expects a bare `yyyy-MM-dd`. */
+    private fun write(vararg lines: String): File = writeLog(temporaryDirectory, "2026-07-22", *lines)
 }

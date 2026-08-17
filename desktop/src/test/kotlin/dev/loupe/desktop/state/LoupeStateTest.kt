@@ -2,6 +2,7 @@ package dev.loupe.desktop.state
 
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.source.LogSource
+import dev.loupe.core.testing.writeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -482,8 +483,7 @@ class LoupeStateTest {
         return messageOf(requireNotNull(state.source.value), results.matches[focus])
     }
 
-    private fun messageOf(source: LogSource, entry: Int): String = source.text
-        .decode(source.index.fileIdOf(entry), source.index.byteOffsets[entry], source.index.byteLengths[entry])
+    private fun messageOf(source: LogSource, entry: Int): String = source.rawText(entry)
         .substringAfter("-> ")
         .substringBefore('\n')
         .substringBefore(' ')
@@ -499,6 +499,6 @@ class LoupeStateTest {
     }
 
     private fun writeDay(name: String, vararg lines: String) {
-        File(folder, name).writeText(lines.joinToString("\n", postfix = "\n"))
+        writeLog(folder, name, *lines)
     }
 }

@@ -1,5 +1,8 @@
 plugins {
     alias(libs.plugins.kotlin.serialization)
+    // So `desktop` can share the test scaffolding. Without it the two modules each kept their own
+    // copy of the same fixture writers, which is how they drifted.
+    `java-test-fixtures`
 }
 
 dependencies {

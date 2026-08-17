@@ -2,7 +2,9 @@ package dev.loupe.core.index
 
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.ProfileRegistry
+import dev.loupe.core.testing.BundledProfile
+import dev.loupe.core.testing.WITHINGS_INDENT
+import dev.loupe.core.testing.writeLog
 import dev.loupe.core.source.LogSourceLoader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -19,9 +21,7 @@ import java.io.File
 class UnrecognisedLinesTest {
 
     companion object {
-        private const val INDENT = "                       " // 23 spaces
-        private val WITHINGS: CompiledProfile = ProfileRegistry.bundled().profiles
-            .single { profile -> profile.name == "withings-healthmate" }
+        private val WITHINGS: CompiledProfile = BundledProfile.withings
     }
 
     @TempDir
@@ -30,7 +30,7 @@ class UnrecognisedLinesTest {
     @Test
     fun `a clean file reports nothing`() {
         // Given
-        val file = write("2026-07-22 10:00:00.000 [D] [Sync] [tag] -> fine", "${INDENT}continued")
+        val file = write("2026-07-22 10:00:00.000 [D] [Sync] [tag] -> fine", "${WITHINGS_INDENT}continued")
 
         // When
         val index: LogIndex = LogIndexer(ProfileEntryParser(WITHINGS)).index(file)
@@ -135,9 +135,5 @@ class UnrecognisedLinesTest {
         }
     }
 
-    private fun write(vararg lines: String): File {
-        val file = File(folder, "2026-07-22")
-        file.writeText(lines.joinToString("\n", postfix = "\n"))
-        return file
-    }
+    private fun write(vararg lines: String): File = writeLog(folder, "2026-07-22", *lines)
 }

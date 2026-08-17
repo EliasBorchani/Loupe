@@ -1,6 +1,7 @@
 package dev.loupe.core.source
 
 import dev.loupe.core.index.LogIndex
+import dev.loupe.core.testing.writeLog
 import dev.loupe.core.io.MappedText
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
@@ -85,8 +86,8 @@ class MergedSourceTest {
         // When
         LogSourceLoader.open(listOf(folder)).use { source ->
             // Then
-            assertTrue(entryText(source, 0).endsWith("from-the-21st"))
-            assertTrue(entryText(source, 1).endsWith("from-the-22nd"))
+            assertTrue(source.rawText(0).endsWith("from-the-21st"))
+            assertTrue(source.rawText(1).endsWith("from-the-22nd"))
             assertEquals(0, source.index.fileIdOf(0))
             assertEquals(1, source.index.fileIdOf(1))
         }
@@ -188,22 +189,16 @@ class MergedSourceTest {
     }
 
     private fun writeDay(name: String, vararg lines: String) {
-        File(folder, name).writeText(lines.joinToString("\n", postfix = "\n"))
+        writeLog(folder, name, *lines)
     }
 
-    private fun entryText(source: LogSource, entry: Int): String = source.text.decode(
-        source.index.fileIdOf(entry),
-        source.index.byteOffsets[entry],
-        source.index.byteLengths[entry],
-    )
-
     private fun messagesOf(source: LogSource): List<String> =
-        (0 until source.index.entryCount).map { entry -> entryText(source, entry).substringAfter("-> ") }
+        (0 until source.index.entryCount).map { entry -> source.rawText(entry).substringAfter("-> ") }
 
     private fun messagesOf(source: LogSource, compiled: CompiledQuery): List<String> {
         val destination = IntArray(source.index.entryCount)
         val matched: Int = compiled.filter.evaluate(source.index, source.text, destination)
-        return destination.take(matched).map { entry -> entryText(source, entry).substringAfter("-> ") }
+        return destination.take(matched).map { entry -> source.rawText(entry).substringAfter("-> ") }
     }
 
     private fun isAscending(index: LogIndex): Boolean =

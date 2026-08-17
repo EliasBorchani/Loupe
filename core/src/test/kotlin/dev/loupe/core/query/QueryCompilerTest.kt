@@ -5,7 +5,7 @@ import dev.loupe.core.index.LogIndexer
 import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.ProfileRegistry
+import dev.loupe.core.testing.BundledProfile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -24,8 +24,7 @@ import java.time.ZoneId
 class QueryCompilerTest {
 
     companion object {
-        private val WITHINGS: CompiledProfile = ProfileRegistry.bundled().profiles
-            .single { profile -> profile.name == "withings-healthmate" }
+        private val WITHINGS: CompiledProfile = BundledProfile.withings
 
         /**
          * The machine's zone, deliberately — not a fixed one.

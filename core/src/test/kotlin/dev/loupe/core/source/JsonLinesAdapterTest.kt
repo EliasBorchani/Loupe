@@ -1,6 +1,7 @@
 package dev.loupe.core.source
 
-import dev.loupe.core.index.LogIndex
+import dev.loupe.core.testing.facetOf
+import dev.loupe.core.testing.writeLog
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -170,7 +171,7 @@ class JsonLinesAdapterTest {
             assertEquals(1.0, source.index.recognisedLineRatio)
             assertEquals(
                 listOf("general", "webservice", "synchronization"),
-                (0..2).map { entry -> facet(source.index, "context", entry) },
+                (0..2).map { entry -> facetOf(source.index, "context", entry) },
             )
             assertEquals("Withings-Logs.ndjson", source.files.single().name)
         }
@@ -184,15 +185,6 @@ class JsonLinesAdapterTest {
 
     private fun open(file: File): LogSource = LogSourceLoader.open(listOf(file))
 
-    private fun write(name: String, vararg lines: String): File {
-        val file = File(folder, name)
-        file.writeText(lines.joinToString("\n", postfix = "\n"))
-        return file
-    }
+    private fun write(name: String, vararg lines: String): File = writeLog(folder, name, *lines)
 
-    private fun facet(index: LogIndex, name: String, entry: Int): String? {
-        val facetIndex: Int = index.facetIndexOf(name)
-        val valueId: Int = index.facetValues[facetIndex][entry]
-        return if (valueId == LogIndex.NO_VALUE) null else index.facetDictionaries[facetIndex].valueOf(valueId)
-    }
 }

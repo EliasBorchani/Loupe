@@ -1,6 +1,7 @@
 package dev.loupe.core.source
 
-import dev.loupe.core.index.LogIndex
+import dev.loupe.core.testing.facetOf
+import dev.loupe.core.testing.writeLog
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -72,7 +73,7 @@ class AndroidStudioLogcatAdapterTest {
         source.use { open ->
             assertEquals(
                 listOf("DisplayPowerController[0]", "ASvc::AudioMetricDataReader"),
-                (0 until open.index.entryCount).map { entry -> facet(open.index, "tag", entry) },
+                (0 until open.index.entryCount).map { entry -> facetOf(open.index, "tag", entry) },
             )
         }
     }
@@ -142,7 +143,7 @@ class AndroidStudioLogcatAdapterTest {
             assertEquals("android-studio-logcat", open.profile.name)
             assertEquals(3, open.index.entryCount)
             assertEquals(1.0, open.index.recognisedLineRatio)
-            assertEquals(listOf("system_server", "com.withings.wiscale2", "com.withings.wiscale2"), (0..2).map { entry -> facet(open.index, "process", entry) })
+            assertEquals(listOf("system_server", "com.withings.wiscale2", "com.withings.wiscale2"), (0..2).map { entry -> facetOf(open.index, "process", entry) })
             // The facet reads the file the user chose, not the temporary copy behind it.
             assertEquals("Google-Pixel-8-Pro.logcat", open.files.single().name)
             assertEquals(1, open.converted.size)
@@ -187,17 +188,8 @@ class AndroidStudioLogcatAdapterTest {
 
     private fun open(export: File): LogSource = LogSourceLoader.open(listOf(export))
 
-    private fun write(name: String, content: String): File {
-        val file = File(folder, name)
-        file.writeText(content)
-        return file
-    }
+    private fun write(name: String, content: String): File = writeLog(folder, name, content)
 
-    private fun facet(index: LogIndex, name: String, entry: Int): String? {
-        val facetIndex: Int = index.facetIndexOf(name)
-        val valueId: Int = index.facetValues[facetIndex][entry]
-        return if (valueId == LogIndex.NO_VALUE) null else index.facetDictionaries[facetIndex].valueOf(valueId)
-    }
 
     /** The shape Android Studio writes, metadata block included so the walker has to step over it. */
     private fun exportOf(vararg messages: String): String = """

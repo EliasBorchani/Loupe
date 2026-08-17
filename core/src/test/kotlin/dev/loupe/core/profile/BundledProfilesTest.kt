@@ -4,6 +4,8 @@ import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.source.LogSourceLoader
+import dev.loupe.core.testing.facetOf
+import dev.loupe.core.testing.writeLog
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -82,8 +84,8 @@ class BundledProfilesTest {
             assertEquals(2, index.entryCount)
             assertEquals(1L, index.noticeLineCount)
             assertEquals(0L, index.unrecognisedLineCount)
-            assertEquals("SyncService", facet(index, "tag", 0))
-            assertEquals("1234", facet(index, "pid", 0))
+            assertEquals("SyncService", facetOf(index, "tag", 0))
+            assertEquals("1234", facetOf(index, "pid", 0))
             assertEquals(4, index.levels[1].toInt()) // E, fifth on V D I W E F S
         }
 
@@ -142,9 +144,9 @@ class BundledProfilesTest {
             // Then
             assertEquals(2, index.entryCount)
             assertEquals(0L, index.unrecognisedLineCount)
-            assertEquals("su", facet(index, "tag", 0))
-            assertEquals("kernel", facet(index, "tag", 1))
-            assertEquals("mymachine", facet(index, "host", 0))
+            assertEquals("su", facetOf(index, "tag", 0))
+            assertEquals("kernel", facetOf(index, "tag", 1))
+            assertEquals("mymachine", facetOf(index, "host", 0))
 
             val first = Instant.ofEpochMilli(index.timestamps[0]).atZone(ZoneId.systemDefault())
             assertEquals(10, first.monthValue)
@@ -267,15 +269,5 @@ class BundledProfilesTest {
         }
     }
 
-    private fun write(name: String, vararg lines: String): File {
-        val file = File(folder, name)
-        file.writeText(lines.joinToString("\n", postfix = "\n"))
-        return file
-    }
-
-    private fun facet(index: LogIndex, name: String, entry: Int): String? {
-        val facetIndex: Int = index.facetIndexOf(name)
-        val valueId: Int = index.facetValues[facetIndex][entry]
-        return if (valueId == LogIndex.NO_VALUE) null else index.facetDictionaries[facetIndex].valueOf(valueId)
-    }
+    private fun write(name: String, vararg lines: String): File = writeLog(folder, name, *lines)
 }
