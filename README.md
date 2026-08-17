@@ -66,7 +66,7 @@ the numbers that did *not* meet target on the first attempt:
 ./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
 ./gradlew test                           # 127 tests
 ./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
-./gradlew :desktop:packageDmg            # unsigned .dmg
+./gradlew :desktop:packageDmg            # unsigned .dmg — see docs/packaging.md
 ```
 
 Requires JDK 17+. No other setup.
@@ -79,8 +79,8 @@ Requires JDK 17+. No other setup.
 | **M1** | Core — TOML profiles, format auto-detection, query language | ✅ done |
 | **M2** | UI — Compose Multiplatform window, virtualised list, facets, query bar, timeline | ✅ done |
 | **M3** | Product — multi-select, copy, keyboard, unfiltered context, export | ✅ done |
-| **M4** | Public — bundled profiles, CI, publication identifiers | ✅ done |
-| | Left: Apple notarisation, and pushing this anywhere | |
+| **M4** | Public — bundled profiles, CI, packaging, release automation | ✅ done |
+| | Left: Apple notarisation, which needs a Developer ID certificate | |
 
 Full product spec (in French): [`docs/PRD.fr.md`](docs/PRD.fr.md).
 

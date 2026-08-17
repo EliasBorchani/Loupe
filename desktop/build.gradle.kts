@@ -1,3 +1,6 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -15,9 +18,33 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+/**
+ * The JDK jpackage runs under, and whose runtime ends up inside the app bundle.
+ *
+ * Resolved only when a packaging task was actually asked for: provisioning downloads a JDK the
+ * first time, and no ordinary build should pay for that. Any Adoptium 17 will do — what matters is
+ * that it is not Homebrew's, whose runtime cannot be notarised once embedded.
+ */
+val packagingJdkHome: String? = run {
+    val wantsPackaging: Boolean = gradle.startParameter.taskNames.any { task ->
+        task.contains("package", ignoreCase = true) || task.contains("createDistributable", ignoreCase = true)
+    }
+    if (!wantsPackaging) {
+        null
+    } else {
+        extensions.getByType(JavaToolchainService::class.java)
+            .launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(17))
+                vendor.set(JvmVendorSpec.ADOPTIUM)
+            }
+            .get().metadata.installationPath.asFile.absolutePath
+    }
+}
+
 compose.desktop {
     application {
         mainClass = "dev.loupe.desktop.MainKt"
+        packagingJdkHome?.let { home -> javaHome = home }
 
         // The index is heap-resident and the mapped text is not, so this is sized for the columns:
         // ~30 bytes per entry means 2 GiB covers roughly 60 million entries.
@@ -30,7 +57,11 @@ compose.desktop {
             description = "A structured log viewer"
             copyright = "© 2026 Elias Borchani. MIT."
             macOS {
-                bundleID = "io.github.eborchani.loupe"
+                // Apple forbids a leading zero in an app version, so jpackage rejects the project's
+                // real 0.1.0 outright. This number belongs to Apple; the one a human reads is in the
+                // tag, the .dmg's file name and the release notes.
+                packageVersion = "1.0.0"
+                bundleID = "io.github.eliasborchani.loupe"
                 dockName = "Loupe"
                 // Two drawings in one .icns: the detailed one from 64px up, a simplified one at 16
                 // and 32 where it would otherwise collapse. Regenerate with tools/render-icon.sh.

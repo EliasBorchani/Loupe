@@ -84,7 +84,7 @@ s'accumuler derrière un mur de bruit.
 
 ## Identifiants
 
-`group = "io.github.eborchani"`, bundle id `io.github.eborchani.loupe`. Une coordonnée
+`group = "io.github.eliasborchani"`, bundle id `io.github.eliasborchani.loupe`. Une coordonnée
 `io.github.` ne demande rien d'autre que le compte GitHub, là où `dev.loupe` revendiquerait un
 domaine. Les paquets Kotlin restent `dev.loupe.*` — ce sont des noms, pas des revendications — et
 c'est une ligne à changer si `loupe.dev` est un jour acquis.

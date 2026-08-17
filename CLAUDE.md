@@ -60,6 +60,17 @@ the KDoc at the site; this is the index.
 - **The merge never sorts.** Each file is already ascending, so `IndexMerger` is a k-way merge over a
   binary heap. It remaps dictionary ids rather than re-interning.
 
+**Packaging**
+- **jpackage copies a JDK into the bundle**, so the build JDK's provenance becomes the app's. The
+  Compose plugin refuses Homebrew's outright and is right to; Gradle provisions an Adoptium 17 into
+  `~/.gradle/jdks`, but only when a packaging task was asked for.
+- **Apple forbids a leading zero in an app version**, so the macOS bundle says 1.0.0 while the
+  project says 0.1.0. That number is Apple's; the human one is the tag and the file name.
+- **One `.dmg` per architecture.** Skiko ships one native library per arch and there is no universal
+  binary, so an arm64 build will not launch on an Intel Mac.
+- **63 MB is the floor**, measured: ~30 MB Skia, ~35 MB AWT runtime, the rest Compose and Kotlin.
+  jlink already keeps only seven modules. Do not go looking for something to trim.
+
 **Formats**
 - **A timestamp with no year assumes one, and says so.** logcat and syslog both write `MM-dd`. The
   loader warns rather than inventing a date in silence, and `assume_year` overrides it.
@@ -142,7 +153,7 @@ combined run.
 ```bash
 ./gradlew test                                   # 127 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
-./gradlew :desktop:packageDmg                    # unsigned .dmg
+./gradlew :desktop:packageDmg                    # unsigned .dmg (63 MB, arm64 or x64 per host)
 ./gradlew build                                  # must be warning-free
 ```
 
@@ -163,6 +174,7 @@ recognise, so it exercises the merge and the skip path.
 | `docs/m3-product.md` | Selection, keyboard, context and export — and why the clipboard is capped. |
 | `docs/m4-public.md` | The four bundled profiles, the two bugs they found, and why there is no JSON one. |
 | `docs/profiles.md` | How to write a profile. The public-facing one; English. |
+| `docs/packaging.md` | Why the packaging config looks like that, and the notarisation checklist. |
 | `profiles/withings.logprofile.toml` | The reference profile, heavily commented. |
 
 ---
@@ -184,6 +196,6 @@ the mapping would add a boundary case to every read for a file nobody has. Revis
   silently wrong for every other; JSON needs a field extractor, not an expression. Shipping one that
   lies about three formats to read one is worse than shipping none.
 - **Apple notarisation.** Needs a Developer account, a Developer ID certificate and an
-  app-specific password. Until then the `.dmg` opens via right-click → Open. Conveyor is free for
-  open source and handles signing, notarisation and updates.
-- **Not pushed anywhere yet.** `main`, MIT, no remote.
+  app-specific password — the one step nobody but the author can take. `docs/packaging.md` has the
+  checklist; the release workflow deliberately builds unsigned rather than shipping untested
+  keychain scripting.

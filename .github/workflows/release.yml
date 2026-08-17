@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    # macOS, unlike the build workflow: jpackage can only produce a .dmg on a Mac.
+    #
+    # Two runners, because `compose.desktop.currentOs` resolves to the *build machine's*
+    # architecture: Skiko ships one native library per arch and there is no fat binary. A single
+    # arm64 build would simply refuse to launch on an Intel Mac.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14   # Apple Silicon
+            arch: arm64
+          - runner: macos-13   # Intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Temurin, not whatever the runner happens to ship. jpackage copies this runtime into the app
+      # bundle, so the JDK's own provenance becomes the app's — which is why the Compose plugin
+      # refuses Homebrew's, and why this is pinned rather than left to chance.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test before packaging
+        run: ./gradlew build
+
+      - name: Package
+        run: ./gradlew :desktop:packageDmg
+
+      - name: Name the artifact after the tag
+        id: artifact
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          SRC=$(find desktop/build/compose/binaries/main/dmg -name '*.dmg' | head -1)
+          [ -n "$SRC" ] || { echo "::error::no .dmg was produced"; exit 1; }
+          DEST="Loupe-${TAG#v}-${{ matrix.arch }}.dmg"
+          mv "$SRC" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+          shasum -a 256 "$DEST" | tee "$DEST.sha256"
+
+      # Unsigned, and the release notes say so. Signing needs a Developer ID certificate and an
+      # app-specific password in repository secrets; see docs/packaging.md for the four lines that
+      # turn it on, which are deliberately not guessed at here.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            ${{ steps.artifact.outputs.path }}
+            ${{ steps.artifact.outputs.path }}.sha256
+          body: |
+            ## Loupe ${{ github.event.inputs.tag || github.ref_name }}
+
+            `arm64` for Apple Silicon, `x64` for Intel. There is no universal build: Skiko ships
+            one native library per architecture.
+
+            **Neither build is notarised.** macOS will refuse to open it on the first try.
+            Right-click the app → **Open** → **Open**, once. Or:
+
+            ```
+            xattr -d com.apple.quarantine /Applications/Loupe.app
+            ```
+
+            Verify the download against the `.sha256` beside it.
