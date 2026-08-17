@@ -156,6 +156,27 @@ class QueryCompilerTest {
     }
 
     @Test
+    fun `an absolute instant names its own day, where a bare time cannot`() {
+        // Given — two days, which is the only corpus that can tell the two forms apart. Both
+        // branches were reachable and untested until the timeline brush came to depend on the first.
+        useCorpus(
+            "two-days",
+            listOf(
+                "2026-07-21 10:00:00.000 [I] [Sync] [PullVasistas] -> first-day",
+                "2026-07-22 10:00:00.000 [I] [Sync] [PullVasistas] -> second-day",
+            ),
+        )
+
+        // When / Then — dated, so it means the day it names.
+        assertEquals(listOf("second-day"), messagesOf(select("since:2026-07-22T00:00:00.000")))
+        assertEquals(listOf("second-day"), messagesOf(select("since:2026-07-22")))
+
+        // And the same hour written bare is a time on the day the source starts — the documented
+        // reading of a typed query, and the reason a brush must not use this form.
+        assertEquals(listOf("first-day", "second-day"), messagesOf(select("since:10:00")))
+    }
+
+    @Test
     fun `a relative window counts back from the last entry, not from now`() {
         // Given — the corpus ends at 13:00 on a date long past. Counting from the wall clock
         // would return nothing at all.
@@ -222,6 +243,15 @@ class QueryCompilerTest {
         // Then
         assertEquals(sequentialCount, parallelCount)
         assertEquals(sequential.take(sequentialCount), parallel.take(parallelCount))
+    }
+
+    /** Rebuilds the fixtures around another corpus, for a case the single-day one cannot express. */
+    private fun useCorpus(name: String, lines: List<String>) {
+        val file = File(temporaryDirectory, name)
+        file.writeText(lines.joinToString("\n", postfix = "\n"))
+        index = LogIndexer(ProfileEntryParser(WITHINGS)).index(file)
+        text = TextSources.of(file)
+        compiler = QueryCompiler(index, ZONE)
     }
 
     private fun select(query: String): List<Int> {

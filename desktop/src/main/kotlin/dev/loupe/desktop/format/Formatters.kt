@@ -3,6 +3,7 @@ package dev.loupe.desktop.format
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -23,9 +24,9 @@ object Formatters {
     val zone: ZoneId = ZoneId.systemDefault()
 
     private val MINUTE: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    private val SECOND: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
     private val MILLISECOND: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
     private val FULL: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+    private val QUERY_INSTANT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
 
     /** Grouped by the machine's convention, because these are read, not parsed. */
     private val COUNT: NumberFormat = NumberFormat.getIntegerInstance(Locale.getDefault())
@@ -33,8 +34,17 @@ object Formatters {
     /** The timeline's two ends, where a minute is as much as 700 pixels can distinguish. */
     fun minute(millis: Long): String = MINUTE.format(instant(millis))
 
-    /** What `since:` and `until:` accept — this one is query syntax, not display. */
-    fun querySecond(millis: Long): String = SECOND.format(instant(millis))
+    /**
+     * What the brush writes into `since:` / `until:` — query syntax, not display.
+     *
+     * Absolute, because a bare `HH:mm:ss` is resolved against the day the source *starts*
+     * (`QueryCompiler.resolveInstant`). That is the right reading of a typed `14:30` and silently
+     * wrong for a drag over any day but the first: brushing day 3 filtered day 1. `'T'` rather than
+     * a space because the lexer ends a token at whitespace, and milliseconds rather than seconds
+     * because both bounds are inclusive — truncating `until` down to the second drops entries the
+     * drag covered, and the band then redraws somewhere other than where it was released.
+     */
+    fun queryInstant(millis: Long): String = QUERY_INSTANT.format(instant(millis))
 
     /** A row in the list: the finest the format records, and all that fits in the column. */
     fun millisecond(millis: Long): String = MILLISECOND.format(instant(millis))
@@ -46,5 +56,5 @@ object Formatters {
 
     fun count(value: Long): String = COUNT.format(value)
 
-    private fun instant(millis: Long) = Instant.ofEpochMilli(millis).atZone(zone)
+    private fun instant(millis: Long): ZonedDateTime = Instant.ofEpochMilli(millis).atZone(zone)
 }

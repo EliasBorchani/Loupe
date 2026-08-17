@@ -28,9 +28,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 enum class ViewMode { Columns, Raw }
 
@@ -355,13 +352,18 @@ class LoupeState(private val scope: CoroutineScope) {
         setQuery(QueryEdits.clearField(_query.value, field))
     }
 
-    /** A timeline brush writes `since:` / `until:`, so the bar always explains the picture. */
+    /**
+     * A timeline brush writes `since:` / `until:`, so the bar always explains the picture.
+     *
+     * The bounds are absolute instants and not times of day: see [Formatters.queryInstant] for what
+     * a bare `HH:mm:ss` did to a folder spanning more than one day.
+     */
     fun setTimeWindow(sinceMillis: Long?, untilMillis: Long?) {
         setQuery(
             QueryEdits.setTimeWindow(
                 query = _query.value,
-                since = sinceMillis?.let { millis -> Formatters.querySecond(millis) },
-                until = untilMillis?.let { millis -> Formatters.querySecond(millis) },
+                since = sinceMillis?.let { millis -> Formatters.queryInstant(millis) },
+                until = untilMillis?.let { millis -> Formatters.queryInstant(millis) },
             ),
         )
     }

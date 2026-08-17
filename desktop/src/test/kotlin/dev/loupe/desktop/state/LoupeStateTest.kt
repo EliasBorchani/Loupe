@@ -42,18 +42,20 @@ class LoupeStateTest {
     fun setUp() {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         state = LoupeState(scope)
+        // Two days on purpose, and the milliseconds are not round: a brush bound truncated to the
+        // second lands somewhere other than where the pointer was released.
         writeDay(
             "2026-07-21",
-            "2026-07-21 23:59:58.000 [I] [Sync] [PullVasistas] -> before-midnight",
-            "2026-07-21 23:59:59.000 [W] [Sync] [PullVasistas] -> retry backoff=200",
-            "2026-07-22 00:00:03.000 [E] [Sync] [PullVasistas] -> gave-up",
+            "2026-07-21 23:59:58.114 [I] [Sync] [PullVasistas] -> before-midnight",
+            "2026-07-21 23:59:59.902 [W] [Sync] [PullVasistas] -> retry backoff=200",
+            "2026-07-22 00:00:03.507 [E] [Sync] [PullVasistas] -> gave-up",
             "                       java.lang.IllegalStateException: nope",
         )
         writeDay(
             "2026-07-22",
-            "2026-07-22 00:00:00.000 [I] [Wpp] [Session] -> midnight",
-            "2026-07-22 00:00:01.000 [D] [Wpp] [Session] -> frame",
-            "2026-07-22 10:00:00.000 [I] [Ui] [HomeActivity] -> morning",
+            "2026-07-22 00:00:00.250 [I] [Wpp] [Session] -> midnight",
+            "2026-07-22 00:00:01.318 [D] [Wpp] [Session] -> frame",
+            "2026-07-22 10:00:00.641 [I] [Ui] [HomeActivity] -> morning",
         )
     }
 
@@ -162,6 +164,37 @@ class LoupeStateTest {
         assertEquals(2, brushed.matchCount)
         assertEquals(totalBars, brushed.histogram.sumOf { level -> level.sum() })
         assertEquals(source.index.minTimestampMillis, brushed.windowSinceMillis)
+    }
+
+    @Test
+    fun `a brush on a later day selects that day, not the first`() = runBlocking {
+        // Given — the merged stream starts on the 21st; entries 4 and 5 are both on the 22nd.
+        val source: LogSource = openFolder()
+
+        // When
+        state.setTimeWindow(source.index.timestamps[4], source.index.timestamps[5])
+
+        // Then — the bounds carry the date. Written as a bare `HH:mm:ss` they were read as times on
+        // the day the source *starts*, which put a brush over the 22nd onto the 21st and matched
+        // nothing at all.
+        assertTrue(state.query.value.contains("since:2026-07-22T"), state.query.value)
+        assertEquals(listOf("gave-up", "morning"), messagesOf(awaitResults(state.query.value)))
+    }
+
+    @Test
+    fun `the brushed band lands exactly where it was dragged`() = runBlocking {
+        // Given — the band is drawn from the window the query compiled to, so a bound rounded down
+        // to the second would redraw away from the pointer, and drop the entries in between.
+        val source: LogSource = openFolder()
+
+        // When
+        state.setTimeWindow(source.index.timestamps[1], source.index.timestamps[4])
+        val brushed: Results = awaitResults(state.query.value)
+
+        // Then
+        assertEquals(source.index.timestamps[1], brushed.windowSinceMillis)
+        assertEquals(source.index.timestamps[4], brushed.windowUntilMillis)
+        assertEquals(listOf("retry", "midnight", "frame", "gave-up"), messagesOf(brushed))
     }
 
     @Test
@@ -469,6 +502,12 @@ class LoupeStateTest {
 
         // Then
         assertTrue(failure.message.contains(".loupe/profiles"), failure.message)
+    }
+
+    /** The messages a result selected, in order — a count cannot see that they are the wrong ones. */
+    private fun messagesOf(results: Results): List<String> {
+        val source: LogSource = requireNotNull(state.source.value)
+        return (0 until results.matchCount).map { position -> messageOf(source, results.matches[position]) }
     }
 
     private fun entryWithMessage(message: String): Int {
