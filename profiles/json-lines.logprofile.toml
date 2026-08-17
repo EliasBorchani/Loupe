@@ -1,0 +1,51 @@
+#  JSON lines (NDJSON), after conversion.
+#
+#  The file on disk is one JSON object per line, as Docker, pino, Bunyan, Serilog, Vector and the
+#  Withings iOS app write. JsonLinesAdapter decodes it and renders the lines below before anything
+#  here is applied — a regex over raw JSON would leave `\"` and `\/` sitting in the message and
+#  would make the key order load-bearing. See docs/profiles.md.
+#
+#      2026-08-13 17:21:15.293 [DEBUG] [webservice] URL Request: POST https://scalewsbeta…
+#                              any key the four slots did not take, as key=value
+
+name        = "json-lines"
+description = "JSON lines / NDJSON, converted to text"
+# Below android-studio-logcat, which shares the timestamp shape and is the more specific format.
+priority    = 44
+
+[detect]
+sample    = 200
+min_match = 0.80
+
+[entry]
+opens = '''^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \['''
+continues = '''^ {23}'''
+strip_continuation_indent = true
+
+[parse]
+# The level is spelled out rather than left as `[A-Z]+`: the adapter normalises every producer's
+# vocabulary onto these seven words, and enumerating them stops this profile from also matching
+# HealthMate's `[D] [Sync] [tag] -> …`, which it otherwise would.
+regex = '''^(?<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?<level>TRACE|DEBUG|INFO|NOTICE|WARN|ERROR|FATAL)\] \[(?<context>[^\]]*)\] (?<message>.*)$'''
+
+[fields.ts]
+role = "timestamp"
+# The adapter has already resolved the source's zone — ISO-8601 offset, `Z`, or epoch — and writes
+# local wall-clock time, so a JSON log merges correctly alongside any other.
+format = "yyyy-MM-dd HH:mm:ss.SSS"
+zone   = "local"
+
+[fields.level]
+role  = "level"
+order = ["TRACE", "DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL"]
+labels = { TRACE = "Trace", DEBUG = "Debug", INFO = "Info", NOTICE = "Notice", WARN = "Warn", ERROR = "Error", FATAL = "Fatal" }
+
+[fields.context]
+role  = "facet"
+# Deliberately neutral: this slot holds whichever of `category`, `logger`, `subsystem`, `tag`… the
+# file turned out to use. The conversion note names the key it actually came from.
+label = "Context"
+facet = "auto"
+
+[fields.message]
+role = "message"

@@ -25,10 +25,11 @@ the code, README and profiles are English.
 `generateProfileIndex` writes `/profiles/index.txt` so `ProfileRegistry.bundled()` can enumerate
 them from inside a jar. It is generated, never hand-edited.
 
-**A profile describes lines; a container does not have any.** An Android Studio `.logcat` export is
-one JSON document holding every message, so no regex can ever read it. Those go through a
-`SourceAdapter` (`core/source/`), which renders the container into text *before* detection and
-indexing — the temporary copy takes the original's name and is deleted on `LogSource.close()`,
+**A profile describes lines; JSON is not lines you can regex.** An Android Studio `.logcat` export
+is one JSON document holding every message; NDJSON is one object per line, which *looks* regexable
+but would leave `\"` and `\/` in the message — nothing downstream unescapes — and would make the
+key order load-bearing. Both go through a `SourceAdapter` (`core/source/`), which decodes the file
+into text *before* detection and indexing — the temporary copy takes the original's name and is deleted on `LogSource.close()`,
 while `LogSource.files` keeps the paths the user chose so reopening still works. Same pattern for
 `.gz`/`.zip` when they land. Adding an adapter is a deliberate act: it claims a whole file format.
 

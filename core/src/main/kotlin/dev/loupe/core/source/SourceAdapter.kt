@@ -43,7 +43,7 @@ object SourceAdapters {
      * The order is the priority order. Kept short deliberately — an adapter is a claim that a whole
      * file format is worth supporting, not a convenience.
      */
-    val all: List<SourceAdapter> = listOf(AndroidStudioLogcatAdapter)
+    val all: List<SourceAdapter> = listOf(AndroidStudioLogcatAdapter, JsonLinesAdapter)
 
     fun claiming(file: File): SourceAdapter? = all.firstOrNull { adapter -> adapter.claims(file) }
 }

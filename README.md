@@ -16,15 +16,15 @@ level>=W cat:Sync since:-2h "timeout"
 
 Ticking a facet writes into the query bar rather than into a hidden selection model, so the syntax
 is learned by using it. Formats are described by **declarative profiles** you can commit next to
-your code, so a whole team shares one viewer that understands their logs. Five ship with it —
-Withings HealthMate, Android logcat, Android Studio's `.logcat` export, BSD syslog, and a catch-all
-for anything with an ISO-8601 timestamp — and the one that best describes your file is picked by
-score, never silently. Drop your own in `~/.loupe/profiles/`:
+your code, so a whole team shares one viewer that understands their logs. Six ship with it —
+Withings HealthMate, Android logcat, Android Studio's `.logcat` export, JSON lines, BSD syslog, and
+a catch-all for anything with an ISO-8601 timestamp — and the one that best describes your file is
+picked by score, never silently. Drop your own in `~/.loupe/profiles/`:
 **[how to write one](docs/profiles.md)**.
 
-An Android Studio export is not text at all — it is one JSON document — so it is converted to
-readable logcat lines on the way in, keeping the year, the process and the stack traces that plain
-`adb logcat` throws away.
+**JSON logs work too.** An Android Studio export is one JSON document, and NDJSON is one object per
+line; both are decoded to readable text on the way in rather than matched with a regex, so `\"` and
+`\/` never reach your screen and an embedded stack trace breaks where it should.
 
 ```toml
 [entry]

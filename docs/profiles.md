@@ -163,17 +163,41 @@ container into plain text before anything is indexed, and a profile reads the re
 copy takes the original's name in a temporary directory that is deleted when the file is closed, so
 the `file` facet still reads right and reopening still points at the real file.
 
-One ships today: `AndroidStudioLogcatAdapter`, paired with the `android-studio-logcat` profile.
-Adding another is a deliberate act — an adapter claims that a whole file format is worth
-supporting, which is a bigger promise than a profile makes.
+Two ship today:
 
-It is also the pattern for `.gz` and `.zip`, which are containers in exactly the same sense.
+| Adapter | Reads | Paired profile |
+|---|---|---|
+| `AndroidStudioLogcatAdapter` | Android Studio's `.logcat` export — one JSON document | `android-studio-logcat` |
+| `JsonLinesAdapter` | JSON lines / NDJSON — one object per line | `json-lines` |
+
+Adding a third is a deliberate act: an adapter claims that a whole file format is worth supporting,
+which is a bigger promise than a profile makes. It is also the pattern `.gz` and `.zip` will want,
+being containers in exactly the same sense.
+
+### Why JSON lines is an adapter and not a profile
+
+NDJSON is line-oriented, so a regex *looks* like it would work — and it does, until it doesn't, in
+two ways that are both silent:
+
+- **The escapes stay escaped.** A captured group is handed to the facet exactly as written, and
+  nothing downstream unescapes. 12 of the 43 lines in the iOS capture this was built against carry
+  `\"`, `\/` or `\n`, so the message would read `POST https:\/\/withings.net` and a stack trace
+  would show a literal `\n` where it should break.
+- **The key order becomes law.** A regex encodes one order. Reorder two keys and it stops matching;
+  add one and it may match and capture the wrong field.
+
+The adapter decodes properly, then picks fields by conventional key name — `timestamp`/`time`/
+`date`/`ts`, `level`/`severity`, `message`/`msg`, and `category`/`logger`/`subsystem`/`tag` for the
+context slot — normalises the level vocabulary onto one scale, resolves the zone, and writes any
+key the four slots did not take onto a continuation line rather than dropping it. **What it picked
+is named in the conversion note**, because a mapping guessed in silence would be the worst of both
+worlds.
 
 ## What a profile cannot do yet
 
-**JSON, as a profile.** A regex only works for one key order and is silently wrong for every other,
-before you get to nested objects and escaped quotes. JSON needs a field extractor. A specific,
-known JSON shape can be handled by an adapter, as `.logcat` is; the general case still cannot.
+**Arbitrary JSON, as a profile.** For the reasons just given, JSON needs a field extractor rather
+than a regex. Two shapes are covered by adapters — one object per line, and the Android Studio
+export. A JSON document of some other shape still needs one written for it.
 
 **A field that is not on the entry's first line.** Everything parsed comes from the opening line;
 continuation lines are text, not structure.

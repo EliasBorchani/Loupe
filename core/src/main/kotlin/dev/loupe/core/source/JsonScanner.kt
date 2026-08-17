@@ -91,6 +91,18 @@ internal class JsonScanner(private val reader: Reader) {
         return builder.toString().toLongOrNull() ?: fail("expected a number")
     }
 
+    /** A number, `true`, `false` or `null`, returned as written. */
+    fun readLiteral(): String {
+        skipBlanks()
+        val builder = StringBuilder()
+        while (currentCode >= 0 && !endsLiteral(currentCode.toChar())) {
+            builder.append(currentCode.toChar())
+            advance()
+        }
+        if (builder.isEmpty()) fail("expected a value")
+        return builder.toString()
+    }
+
     /** Walks past the next value, whatever it is, including a nested object or array. */
     fun skipValue() {
         skipBlanks()
@@ -162,16 +174,14 @@ internal class JsonScanner(private val reader: Reader) {
     }
 
     private fun skipLiteral() {
-        while (currentCode >= 0) {
-            val character: Char = currentCode.toChar()
-            if (character == ',' || character == '}' || character == ']' ||
-                character == ' ' || character == '\n' || character == '\r' || character == '\t'
-            ) {
-                return
-            }
+        while (currentCode >= 0 && !endsLiteral(currentCode.toChar())) {
             advance()
         }
     }
+
+    private fun endsLiteral(character: Char): Boolean =
+        character == ',' || character == '}' || character == ']' ||
+            character == ' ' || character == '\n' || character == '\r' || character == '\t'
 
     private fun advance() {
         currentCode = reader.read()
