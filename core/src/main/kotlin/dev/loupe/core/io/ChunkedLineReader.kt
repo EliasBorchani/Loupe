@@ -24,10 +24,7 @@ fun interface LineVisitor {
  * still earns its keep for random access afterwards (see [MappedText]); it just loses on the
  * sequential pass. Confirmed by the M0 spike.
  */
-class ChunkedLineReader(
-    private val file: File,
-    private val chunkSize: Int = DEFAULT_CHUNK_SIZE,
-) {
+class ChunkedLineReader(private val file: File, private val chunkSize: Int = DEFAULT_CHUNK_SIZE) {
 
     companion object {
         const val DEFAULT_CHUNK_SIZE: Int = 8 shl 20 // 8 MiB

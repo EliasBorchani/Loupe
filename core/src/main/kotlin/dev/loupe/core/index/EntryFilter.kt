@@ -129,7 +129,10 @@ class EntryFilter(
 
         if (substringLowercase != null && text != null &&
             !text.containsIgnoreCase(
-                index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry], substringLowercase,
+                index.fileIdOf(entry),
+                index.byteOffsets[entry],
+                index.byteLengths[entry],
+                substringLowercase,
             )
         ) {
             return false
@@ -154,8 +157,7 @@ class EntryFilter(
         return copyWith(facetConstraints = relaxed)
     }
 
-    fun withoutLevels(): EntryFilter =
-        if (acceptedLevels == null) this else copyWith(acceptedLevels = null, acceptUnknownLevel = true)
+    fun withoutLevels(): EntryFilter = if (acceptedLevels == null) this else copyWith(acceptedLevels = null, acceptUnknownLevel = true)
 
     /**
      * Drops `since` / `until`.

@@ -49,7 +49,6 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
 
     override val emittedProfileName: String = "json-lines"
 
-
     private val TIMESTAMP_KEYS: List<String> =
         listOf("timestamp", "@timestamp", "time", "date", "datetime", "eventtime", "ts")
 
@@ -168,10 +167,9 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
         )
     }
 
-    private fun pick(fields: Map<String, String>, conventional: List<String>): String? =
-        conventional.firstNotNullOfOrNull { wanted ->
-            fields.keys.firstOrNull { key -> key.equals(wanted, ignoreCase = true) }
-        }
+    private fun pick(fields: Map<String, String>, conventional: List<String>): String? = conventional.firstNotNullOfOrNull { wanted ->
+        fields.keys.firstOrNull { key -> key.equals(wanted, ignoreCase = true) }
+    }
 
     private fun readFlatObject(scanner: JsonScanner): Map<String, String> {
         val fields = LinkedHashMap<String, String>()
@@ -185,7 +183,9 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
                 // Nested structure: no column can hold it, and flattening it into one would invent
                 // a shape the producer never wrote.
                 '{', '[' -> scanner.skipValue()
+
                 '"' -> fields[key] = scanner.readString()
+
                 else -> fields[key] = scanner.readLiteral()
             }
         } while (scanner.skipIf(','))
@@ -211,12 +211,7 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
         return null
     }
 
-    private class KeyMapping(
-        val timestamp: String,
-        val message: String,
-        val level: String?,
-        val context: String?,
-    ) {
+    private class KeyMapping(val timestamp: String, val message: String, val level: String?, val context: String?) {
         val taken: Set<String> = setOfNotNull(timestamp, message, level, context)
     }
 }

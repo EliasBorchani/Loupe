@@ -36,10 +36,9 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
             return ProfileRegistry(loaded)
         }
 
-        private fun readBundledIndex(): String =
-            requireNotNull(ProfileRegistry::class.java.getResourceAsStream(BUNDLED_INDEX)) {
-                "$BUNDLED_INDEX is missing — the generateProfileIndex task did not run"
-            }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
+        private fun readBundledIndex(): String = requireNotNull(ProfileRegistry::class.java.getResourceAsStream(BUNDLED_INDEX)) {
+            "$BUNDLED_INDEX is missing — the generateProfileIndex task did not run"
+        }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
 
         /** File names of the bundled profiles, for anyone offering one as a starting point. */
         fun bundledFileNames(): List<String> = readBundledIndex()
@@ -49,9 +48,8 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
             .toList()
 
         /** The raw TOML of a bundled profile — heavily commented, which is the point of copying it. */
-        fun bundledSource(fileName: String): String? =
-            ProfileRegistry::class.java.getResourceAsStream("$BUNDLED_ROOT/$fileName")
-                ?.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
+        fun bundledSource(fileName: String): String? = ProfileRegistry::class.java.getResourceAsStream("$BUNDLED_ROOT/$fileName")
+            ?.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
 
         /** Where a user drops their own profiles. Read on every open, so editing one needs no restart. */
         fun userDirectory(): File = File(System.getProperty("user.home"), ".loupe/profiles")
@@ -97,8 +95,7 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
      * waste of a pass and at worst a mis-detection: a plain log merely *shaped* like a converted one
      * would be read by a profile intended for something else.
      */
-    fun excluding(names: Set<String>): ProfileRegistry =
-        ProfileRegistry(profiles.filter { profile -> profile.name !in names })
+    fun excluding(names: Set<String>): ProfileRegistry = ProfileRegistry(profiles.filter { profile -> profile.name !in names })
 
     /** @return every candidate that cleared its own `min_match`, best first. Empty if none did. */
     fun detect(file: File): List<ProfileMatch> = profiles

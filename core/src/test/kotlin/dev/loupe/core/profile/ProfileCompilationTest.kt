@@ -357,9 +357,11 @@ class ProfileCompilationTest {
         fun `stops reading after the sample rather than scanning the whole file`() {
             // Given — far more lines than detect.sample.
             val file = File(temporaryDirectory, "2026-07-22")
-            file.writeText((1..50_000).joinToString("\n", postfix = "\n") { index ->
-                "2026-07-22 10:00:00.%03d [D] [Sync] [tag] -> line $index".format(index % 1000)
-            })
+            file.writeText(
+                (1..50_000).joinToString("\n", postfix = "\n") { index ->
+                    "2026-07-22 10:00:00.%03d [D] [Sync] [tag] -> line $index".format(index % 1000)
+                },
+            )
 
             // When
             val match: ProfileMatch = requireNotNull(ProfileRegistry.bundled().best(file))

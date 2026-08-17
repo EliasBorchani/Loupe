@@ -69,7 +69,9 @@ class LogIndexer(private val parser: EntryParser) {
                 // separator or a truncation notice is information, not noise.
                 when (classify(markers, buffer, start, end)) {
                     MarkerRole.Section -> sectionLineCount++
+
                     MarkerRole.Notice -> noticeLineCount++
+
                     // Counted in full, sampled per shape: the count is a health indicator, the
                     // shape is what says which part of the profile is wrong.
                     null -> {
@@ -101,12 +103,7 @@ class LogIndexer(private val parser: EntryParser) {
      * Markers are rare by construction, so this is allowed to allocate: it only ever runs on lines
      * that are neither an entry nor a continuation.
      */
-    private fun classify(
-        markers: List<dev.loupe.core.profile.CompiledMarker>,
-        buffer: ByteArray,
-        start: Int,
-        end: Int,
-    ): MarkerRole? {
+    private fun classify(markers: List<dev.loupe.core.profile.CompiledMarker>, buffer: ByteArray, start: Int, end: Int): MarkerRole? {
         if (markers.isEmpty()) return null
         val line = String(buffer, start, end - start, Charsets.UTF_8)
         return markers.firstOrNull { marker -> marker.pattern.matcher(line).find() }?.role

@@ -29,8 +29,7 @@ class BundledProfilesTest {
     companion object {
         private val REGISTRY: ProfileRegistry = ProfileRegistry.bundled()
 
-        private fun profile(name: String): CompiledProfile =
-            REGISTRY.profiles.single { candidate -> candidate.name == name }
+        private fun profile(name: String): CompiledProfile = REGISTRY.profiles.single { candidate -> candidate.name == name }
     }
 
     @TempDir
@@ -42,8 +41,12 @@ class BundledProfilesTest {
         // Then
         assertEquals(
             listOf(
-                "android-logcat", "android-studio-logcat", "generic-timestamped", "json-lines",
-                "syslog-rfc3164", "withings-healthmate",
+                "android-logcat",
+                "android-studio-logcat",
+                "generic-timestamped",
+                "json-lines",
+                "syslog-rfc3164",
+                "withings-healthmate",
             ),
             REGISTRY.profiles.map { candidate -> candidate.name }.sorted(),
         )

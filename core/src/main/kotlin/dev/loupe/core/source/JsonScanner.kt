@@ -64,10 +64,12 @@ internal class JsonScanner(private val reader: Reader) {
                     advance()
                     return builder.toString()
                 }
+
                 '\\' -> {
                     advance()
                     builder.append(readEscape())
                 }
+
                 else -> {
                     builder.append(character)
                     advance()
@@ -121,16 +123,25 @@ internal class JsonScanner(private val reader: Reader) {
         advance()
         return when (marker) {
             '"' -> '"'
+
             '\\' -> '\\'
+
             '/' -> '/'
+
             'b' -> '\b'
+
             'f' -> '\u000C'
+
             'n' -> '\n'
+
             'r' -> '\r'
+
             't' -> '\t'
+
             // A surrogate pair arrives as two of these in a row; appending each half in turn
             // reassembles it, because a Kotlin String is UTF-16 to begin with.
             'u' -> readUnicodeEscape()
+
             else -> fail("unknown escape '\\$marker'")
         }
     }
@@ -160,14 +171,17 @@ internal class JsonScanner(private val reader: Reader) {
             if (currentCode < 0) fail("unterminated '$open'")
             when (currentCode.toChar()) {
                 '"' -> readString()
+
                 open -> {
                     depth++
                     advance()
                 }
+
                 close -> {
                     depth--
                     advance()
                 }
+
                 else -> advance()
             }
         }
@@ -179,17 +193,15 @@ internal class JsonScanner(private val reader: Reader) {
         }
     }
 
-    private fun endsLiteral(character: Char): Boolean =
-        character == ',' || character == '}' || character == ']' ||
-            character == ' ' || character == '\n' || character == '\r' || character == '\t'
+    private fun endsLiteral(character: Char): Boolean = character == ',' || character == '}' || character == ']' ||
+        character == ' ' || character == '\n' || character == '\r' || character == '\t'
 
     private fun advance() {
         currentCode = reader.read()
         charactersRead++
     }
 
-    private fun fail(reason: String): Nothing =
-        throw JsonFormatException("$reason (at character $charactersRead)")
+    private fun fail(reason: String): Nothing = throw JsonFormatException("$reason (at character $charactersRead)")
 }
 
 class JsonFormatException(message: String) : IllegalArgumentException(message)

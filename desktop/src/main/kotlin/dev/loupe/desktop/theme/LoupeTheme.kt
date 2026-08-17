@@ -162,10 +162,12 @@ val LocalLoupeTypography: ProvidableCompositionLocal<LoupeTypography> = staticCo
 
 object LoupeTheme {
     val colors: LoupeColors
-        @Composable @ReadOnlyComposable get() = LocalLoupeColors.current
+        @Composable @ReadOnlyComposable
+        get() = LocalLoupeColors.current
 
     val type: LoupeTypography
-        @Composable @ReadOnlyComposable get() = LocalLoupeTypography.current
+        @Composable @ReadOnlyComposable
+        get() = LocalLoupeTypography.current
 }
 
 @Composable

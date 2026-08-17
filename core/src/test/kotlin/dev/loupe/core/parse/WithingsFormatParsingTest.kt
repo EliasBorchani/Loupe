@@ -268,6 +268,7 @@ class WithingsFormatParsingTest {
     }
 
     /** @return the facet's value for an entry, or `null` when the group did not participate. */
+
     /** Reads an entry back through the same `(offset, length)` path the UI would use. */
     private fun readEntry(file: File, index: LogIndex, entry: Int): String =
         TextSources.of(file).use { text -> text.decode(0, index.byteOffsets[entry], index.byteLengths[entry]) }

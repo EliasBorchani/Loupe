@@ -85,10 +85,7 @@ class UnrecognisedLine(
  * The cap is **per kind**, not overall: one shape usually dominates, and a total cap would let it
  * crowd out the single example of the shape that actually explains the problem.
  */
-class UnrecognisedReport(
-    val countsByKind: IntArray,
-    val samples: List<UnrecognisedLine>,
-) {
+class UnrecognisedReport(val countsByKind: IntArray, val samples: List<UnrecognisedLine>) {
 
     companion object {
         const val SAMPLES_PER_KIND: Int = 5

@@ -2,10 +2,10 @@ package dev.loupe.core.index
 
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
+import dev.loupe.core.source.LogSourceLoader
 import dev.loupe.core.testing.BundledProfile
 import dev.loupe.core.testing.WITHINGS_INDENT
 import dev.loupe.core.testing.writeLog
-import dev.loupe.core.source.LogSourceLoader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

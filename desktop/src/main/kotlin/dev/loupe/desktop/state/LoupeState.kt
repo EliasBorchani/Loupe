@@ -4,12 +4,12 @@ import dev.loupe.core.index.EntryFilter
 import dev.loupe.core.index.FacetCounts
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.SidebarCounts
+import dev.loupe.core.profile.ProfileRegistry
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
 import dev.loupe.core.query.QueryEdits
 import dev.loupe.core.source.EntryExport
 import dev.loupe.core.source.LogSource
-import dev.loupe.core.profile.ProfileRegistry
 import dev.loupe.core.source.LogSourceLoader
 import dev.loupe.core.source.OpenPhase
 import dev.loupe.desktop.format.Formatters
@@ -122,7 +122,6 @@ class LoupeState(private val scope: CoroutineScope) {
     companion object {
         /** Long enough to skip the intermediate states of typing, short enough to feel immediate. */
         private const val QUERY_DEBOUNCE_MILLIS = 180L
-
     }
 
     private val _source = MutableStateFlow<LogSource?>(null)
@@ -172,8 +171,7 @@ class LoupeState(private val scope: CoroutineScope) {
             .stateIn(scope, SharingStarted.Eagerly, null)
 
     /** True while the displayed results are behind what the user has asked for. */
-    fun isCatchingUp(results: Results?): Boolean =
-        _source.value != null && (results == null || results.query != _query.value)
+    fun isCatchingUp(results: Results?): Boolean = _source.value != null && (results == null || results.query != _query.value)
 
     fun open(paths: List<File>) {
         openJob?.cancel()

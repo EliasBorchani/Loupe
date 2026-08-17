@@ -49,7 +49,9 @@ class AndroidStudioLogcatAdapterTest {
         assertEquals(1, lines.size)
         assertTrue(
             lines[0].matches(
-                Regex("""\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\s+1971\s+2033 D \[WindowManager] \[system_server] applying DisplayInfo"""),
+                Regex(
+                    """\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\s+1971\s+2033 D \[WindowManager] \[system_server] applying DisplayInfo""",
+                ),
             ),
             "unexpected line: ${lines[0]}",
         )
@@ -81,7 +83,9 @@ class AndroidStudioLogcatAdapterTest {
     @Test
     fun `folds a stack trace into one entry`() {
         // Given — the export keeps a trace as a single message; raw logcat would have split it.
-        val trace = "Failed to deliver transaction\\n\\tat android.os.Binder.execTransact(Binder.java:1345)\\n\\tat com.example.Foo.bar(Foo.java:12)"
+        val trace = "Failed to deliver transaction\\n" +
+            "\\tat android.os.Binder.execTransact(Binder.java:1345)\\n" +
+            "\\tat com.example.Foo.bar(Foo.java:12)"
         val export: File = write("export.logcat", exportOf(message("ActivityManager", "system_server", "ERROR", trace)))
 
         // When
@@ -143,7 +147,10 @@ class AndroidStudioLogcatAdapterTest {
             assertEquals("android-studio-logcat", open.profile.name)
             assertEquals(3, open.index.entryCount)
             assertEquals(1.0, open.index.recognisedLineRatio)
-            assertEquals(listOf("system_server", "com.withings.wiscale2", "com.withings.wiscale2"), (0..2).map { entry -> facetOf(open.index, "process", entry) })
+            assertEquals(
+                listOf("system_server", "com.withings.wiscale2", "com.withings.wiscale2"),
+                (0..2).map { entry -> facetOf(open.index, "process", entry) },
+            )
             // The facet reads the file the user chose, not the temporary copy behind it.
             assertEquals("Google-Pixel-8-Pro.logcat", open.files.single().name)
             assertEquals(1, open.converted.size)
@@ -166,9 +173,8 @@ class AndroidStudioLogcatAdapterTest {
         assertTrue(export.exists())
     }
 
-    private fun temporaryDirectoryCount(): Int =
-        File(System.getProperty("java.io.tmpdir")).listFiles().orEmpty()
-            .count { file -> file.name.startsWith("loupe-converted") }
+    private fun temporaryDirectoryCount(): Int = File(System.getProperty("java.io.tmpdir")).listFiles().orEmpty()
+        .count { file -> file.name.startsWith("loupe-converted") }
 
     @Test
     fun `refuses a JSON document that is not an export`() {
@@ -189,7 +195,6 @@ class AndroidStudioLogcatAdapterTest {
     private fun open(export: File): LogSource = LogSourceLoader.open(listOf(export))
 
     private fun write(name: String, content: String): File = writeLog(folder, name, content)
-
 
     /** The shape Android Studio writes, metadata block included so the walker has to step over it. */
     private fun exportOf(vararg messages: String): String = """

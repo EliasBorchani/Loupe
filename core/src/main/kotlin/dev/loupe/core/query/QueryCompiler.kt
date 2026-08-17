@@ -26,10 +26,7 @@ import java.util.regex.PatternSyntaxException
  * the rest of the query still compiles, because the user is typing and half a query should still
  * narrow the list.
  */
-class CompiledQuery(
-    val filter: EntryFilter,
-    val problems: List<String>,
-) {
+class CompiledQuery(val filter: EntryFilter, val problems: List<String>) {
     val isValid: Boolean get() = problems.isEmpty()
 }
 
@@ -120,8 +117,7 @@ class QueryCompiler(private val index: LogIndex, private val zone: ZoneId = Zone
         )
     }
 
-    private fun knownFieldNames(): List<String> =
-        listOf(LEVEL_FIELD, SINCE_FIELD, UNTIL_FIELD) + index.facets.map { facet -> facet.name }
+    private fun knownFieldNames(): List<String> = listOf(LEVEL_FIELD, SINCE_FIELD, UNTIL_FIELD) + index.facets.map { facet -> facet.name }
 
     /** Matches on the declared name first, then on the label, both case-insensitively. */
     private fun resolveFacetIndex(field: String): Int {

@@ -74,8 +74,7 @@ object Formatters {
     fun epochDay(millis: Long): Long = instant(millis).toLocalDate().toEpochDay()
 
     /** Whether a source crosses midnight, and therefore has to say which day a row is on. */
-    fun spansMultipleDays(fromMillis: Long, toMillis: Long): Boolean =
-        epochDay(fromMillis) != epochDay(toMillis)
+    fun spansMultipleDays(fromMillis: Long, toMillis: Long): Boolean = epochDay(fromMillis) != epochDay(toMillis)
 
     fun count(value: Int): String = COUNT.format(value)
 

@@ -81,41 +81,47 @@ data class FieldSpec(
 )
 
 @Serializable
-data class MarkerSpec(
-    val regex: String,
-    val role: MarkerRole,
-)
+data class MarkerSpec(val regex: String, val role: MarkerRole)
 
 @Serializable
 enum class FieldRole {
-    @SerialName("timestamp") Timestamp,
+    @SerialName("timestamp")
+    Timestamp,
 
-    @SerialName("level") Level,
+    @SerialName("level")
+    Level,
 
-    @SerialName("facet") Facet,
+    @SerialName("facet")
+    Facet,
 
-    @SerialName("message") Message,
+    @SerialName("message")
+    Message,
 }
 
 /** How the sidebar should treat a facet whose cardinality is not known in advance. */
 @Serializable
 enum class FacetMode {
     /** Always render the full list. */
-    @SerialName("always") Always,
+    @SerialName("always")
+    Always,
 
     /** Full list while small, top-N plus a search box past that — the R8-obfuscated tag case. */
-    @SerialName("auto") Auto,
+    @SerialName("auto")
+    Auto,
 
     /** Parse the field but keep it out of the sidebar. */
-    @SerialName("never") Never,
+    @SerialName("never")
+    Never,
 }
 
 /** What a line that is not a log entry nevertheless means. */
 @Serializable
 enum class MarkerRole {
     /** Opens a named section, e.g. the `=== 2026-07-22 ===` separator in a multi-day export. */
-    @SerialName("section") Section,
+    @SerialName("section")
+    Section,
 
     /** Informational, e.g. `--- older lines dropped ---`. Shown, never counted as an entry. */
-    @SerialName("notice") Notice,
+    @SerialName("notice")
+    Notice,
 }

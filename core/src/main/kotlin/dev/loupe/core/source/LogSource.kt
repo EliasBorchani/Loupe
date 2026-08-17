@@ -7,8 +7,8 @@ import dev.loupe.core.io.MappedText
 import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.ProfileMatch
 import dev.loupe.core.profile.LoadedRegistry
+import dev.loupe.core.profile.ProfileMatch
 import dev.loupe.core.profile.ProfileRegistry
 import java.io.Closeable
 import java.io.File
@@ -48,8 +48,7 @@ class LogSource(
      * out in three places — the renderer, the exporter and the clipboard — and a fourth would have
      * been written the next time something needed an entry's text.
      */
-    fun rawText(entry: Int): String =
-        text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry])
+    fun rawText(entry: Int): String = text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry])
 
     override fun close() {
         // Unmap before deleting: the converted text lives in that directory.
@@ -251,15 +250,12 @@ object LogSourceLoader {
     /** What the user chose, and what the indexer will actually read. The same file, unless converted. */
     private class PreparedFile(val original: File, val readable: File, val adapter: SourceAdapter?)
 
-    private class Prepared(
-        val files: List<PreparedFile>,
-        val converted: List<ConvertedSource>,
-        val temporaryDirectory: File?,
-    )
+    private class Prepared(val files: List<PreparedFile>, val converted: List<ConvertedSource>, val temporaryDirectory: File?)
 }
 
-class NoMatchingProfileException(file: File, profileNames: List<String>) : IllegalArgumentException(
-    "No profile recognises '${file.name}'. Tried: ${profileNames.joinToString(", ")}. " +
-        "Write one and drop it in ${ProfileRegistry.userDirectory()} — it is read on every open, " +
-        "so you can edit it and reopen the file without restarting.",
-)
+class NoMatchingProfileException(file: File, profileNames: List<String>) :
+    IllegalArgumentException(
+        "No profile recognises '${file.name}'. Tried: ${profileNames.joinToString(", ")}. " +
+            "Write one and drop it in ${ProfileRegistry.userDirectory()} — it is read on every open, " +
+            "so you can edit it and reopen the file without restarting.",
+    )

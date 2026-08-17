@@ -1,6 +1,5 @@
 rootProject.name = "loupe"
 
-
 pluginManagement {
     repositories {
         gradlePluginPortal()

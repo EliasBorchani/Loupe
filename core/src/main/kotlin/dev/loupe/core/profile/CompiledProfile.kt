@@ -230,7 +230,5 @@ class CompiledFacet(
 
 class CompiledMarker(val pattern: Pattern, val role: MarkerRole)
 
-class InvalidProfileException(
-    val problems: List<String>,
-    cause: Throwable? = null,
-) : IllegalArgumentException(problems.joinToString(prefix = "Invalid log profile:\n  - ", separator = "\n  - "), cause)
+class InvalidProfileException(val problems: List<String>, cause: Throwable? = null) :
+    IllegalArgumentException(problems.joinToString(prefix = "Invalid log profile:\n  - ", separator = "\n  - "), cause)

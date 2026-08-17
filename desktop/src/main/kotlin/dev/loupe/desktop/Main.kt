@@ -66,14 +66,13 @@ import dev.loupe.desktop.ui.StatusBar
 import dev.loupe.desktop.ui.TimelineStrip
 import dev.loupe.desktop.ui.VerticalDivider
 import dev.loupe.desktop.ui.Welcome
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.io.File
 import javax.swing.JFileChooser
 import javax.swing.UIManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-
 
 fun main(args: Array<String>) {
     // Native-feeling menu bar and window title on macOS.
@@ -118,11 +117,7 @@ fun main(args: Array<String>) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun LoupeApp(
-    state: LoupeState,
-    queryFocus: FocusRequester,
-    initialPaths: List<File> = emptyList(),
-) {
+private fun LoupeApp(state: LoupeState, queryFocus: FocusRequester, initialPaths: List<File> = emptyList()) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboard.current
 
@@ -170,10 +165,12 @@ private fun LoupeApp(
         val current: LogSource? = source
         when {
             status is OpenStatus.Working -> Opening(status as OpenStatus.Working)
+
             current == null -> Welcome(
                 failure = (status as? OpenStatus.Failed)?.message,
                 onOpen = { chooseAndOpen(state, add = false) },
             )
+
             else -> Loaded(
                 state = state,
                 source = current,

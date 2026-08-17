@@ -16,9 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -158,8 +158,11 @@ fun TimelineStrip(
                 }
                 val settled: ClosedFloatingPointRange<Float>? = when {
                     live != null -> null
+
                     span <= 0L -> null
+
                     results.windowSinceMillis == null && results.windowUntilMillis == null -> null
+
                     else -> {
                         val from: Long = results.windowSinceMillis ?: index.minTimestampMillis
                         val to: Long = results.windowUntilMillis ?: index.maxTimestampMillis
@@ -261,8 +264,7 @@ fun TimelineStrip(
 }
 
 /** The date only earns the width when the strip crosses midnight; otherwise the hours say it all. */
-private fun endLabel(millis: Long, spansDays: Boolean): String =
-    if (spansDays) Formatters.dayMinute(millis) else Formatters.minute(millis)
+private fun endLabel(millis: Long, spansDays: Boolean): String = if (spansDays) Formatters.dayMinute(millis) else Formatters.minute(millis)
 
 private const val MINIMUM_BRUSH_PIXELS = 4f
 

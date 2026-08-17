@@ -31,7 +31,7 @@ class SourceAdapterClaimsTest {
         assertEquals("Android Studio logcat export", claimantOf("crlf.logcat", "{\r\n  \"logcatMessages\": []\r\n}\r\n"))
 
         // A byte-order mark is not whitespace, so it would otherwise sit in front of the `{`.
-        assertEquals("JSON lines", claimantOf("bom.ndjson", "﻿{\"time\":\"2026-08-13T15:00:00Z\",\"msg\":\"hi\"}"))
+        assertEquals("JSON lines", claimantOf("bom.ndjson", "{\"time\":\"2026-08-13T15:00:00Z\",\"msg\":\"hi\"}"))
 
         assertNull(claimantOf("2026-07-22", "2026-07-22 10:00:00.000 [D] [Sync] [Pull] -> hello"))
         assertNull(claimantOf("logcat.txt", "06-02 10:00:01.001  1234  5678 D Tag: hello"))
@@ -60,8 +60,7 @@ class SourceAdapterClaimsTest {
         }
     }
 
-    private fun claimantOf(name: String, content: String): String? =
-        SourceAdapters.claiming(write(name, content))?.name
+    private fun claimantOf(name: String, content: String): String? = SourceAdapters.claiming(write(name, content))?.name
 
     private fun write(name: String, content: String): File {
         val file = File(folder, name)

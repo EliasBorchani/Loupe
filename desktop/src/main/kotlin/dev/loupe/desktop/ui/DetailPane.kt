@@ -18,9 +18,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,14 +45,7 @@ import dev.loupe.desktop.theme.Spacing
  * every row in the list to detail one of them.
  */
 @Composable
-fun DetailPane(
-    source: LogSource,
-    entry: Int,
-    context: IntRange,
-    onClose: () -> Unit,
-    onCopy: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun DetailPane(source: LogSource, entry: Int, context: IntRange, onClose: () -> Unit, onCopy: () -> Unit, modifier: Modifier = Modifier) {
     val colors = LoupeTheme.colors
     val index: LogIndex = source.index
     val raw: String = remember(entry, source) { EntryRenderer.render(source, entry).raw }
@@ -150,7 +143,15 @@ private fun UnfilteredContext(source: LogSource, focused: Int, context: IntRange
                 ),
                 maxLines = 1,
                 modifier = Modifier
-                    .background(if (entry == focused) colors.accentSoft else colors.surfaceForLevel(ordinal, source.index.profile.levelCount))
+                    .background(
+                        if (entry ==
+                            focused
+                        ) {
+                            colors.accentSoft
+                        } else {
+                            colors.surfaceForLevel(ordinal, source.index.profile.levelCount)
+                        },
+                    )
                     .padding(horizontal = Spacing.tiny),
             )
         }

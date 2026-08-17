@@ -23,13 +23,7 @@ import dev.loupe.desktop.theme.Spacing
  * The header: which files are open, which profile read them, and the actions on them.
  */
 @Composable
-fun SourceHeader(
-    source: LogSource,
-    onOpen: () -> Unit,
-    onAdd: () -> Unit,
-    onExport: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun SourceHeader(source: LogSource, onOpen: () -> Unit, onAdd: () -> Unit, onExport: () -> Unit, modifier: Modifier = Modifier) {
     val colors = LoupeTheme.colors
     Row(
         modifier = modifier

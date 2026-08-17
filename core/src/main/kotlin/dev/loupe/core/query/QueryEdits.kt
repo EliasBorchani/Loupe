@@ -22,12 +22,7 @@ object QueryEdits {
      *   contiguously to the most severe end collapses to `level>=W`, because that is both shorter
      *   and what the user actually meant by ticking Warn and Error.
      */
-    fun toggleFacetValue(
-        query: String,
-        field: String,
-        value: String,
-        severityOrder: List<String>? = null,
-    ): String {
+    fun toggleFacetValue(query: String, field: String, value: String, severityOrder: List<String>? = null): String {
         val existing: List<QueryToken.Field> = editableTermsFor(query, field)
         val current: LinkedHashSet<String> = LinkedHashSet()
         existing.forEach { term -> current.addAll(expand(term, severityOrder)) }
@@ -39,8 +34,7 @@ object QueryEdits {
     }
 
     /** Drops every term for [field], leaving the rest of the query as written. */
-    fun clearField(query: String, field: String): String =
-        replaceTerms(query, editableTermsFor(query, field), null)
+    fun clearField(query: String, field: String): String = replaceTerms(query, editableTermsFor(query, field), null)
 
     /** Sets — or with `null`, removes — the `since` / `until` bounds a timeline brush produces. */
     fun setTimeWindow(query: String, since: String?, until: String?): String {
@@ -61,14 +55,13 @@ object QueryEdits {
      * round-trip. A `-category:Ui` or a `level<D` is left alone and a new term is added beside it —
      * silently rewriting something the user typed deliberately would be worse than a redundant term.
      */
-    private fun editableTermsFor(query: String, field: String): List<QueryToken.Field> =
-        QueryLexer.tokenize(query)
-            .filterIsInstance<QueryToken.Field>()
-            .filter { term ->
-                term.field.equals(field, ignoreCase = true) &&
-                    !term.negated &&
-                    (term.comparison == Comparison.Equals || term.comparison == Comparison.AtLeast)
-            }
+    private fun editableTermsFor(query: String, field: String): List<QueryToken.Field> = QueryLexer.tokenize(query)
+        .filterIsInstance<QueryToken.Field>()
+        .filter { term ->
+            term.field.equals(field, ignoreCase = true) &&
+                !term.negated &&
+                (term.comparison == Comparison.Equals || term.comparison == Comparison.AtLeast)
+        }
 
     /** `level>=W` on a `V D I W E` scale means W and E, so a toggle can remove either. */
     private fun expand(term: QueryToken.Field, severityOrder: List<String>?): List<String> {

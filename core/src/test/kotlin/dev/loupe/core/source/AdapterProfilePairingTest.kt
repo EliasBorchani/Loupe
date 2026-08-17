@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
-import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 /**
  * An adapter's writer and its profile are two halves of one format, and this holds them together.
@@ -105,7 +105,9 @@ class AdapterProfilePairingTest {
             // When
             val writable: List<String> = when (val column = adapter.shape.columns.single { candidate -> candidate.field == "level" }) {
                 is CanonicalColumn.Vocabulary -> column.words
+
                 is CanonicalColumn.Code -> column.alphabet.map { letter -> letter.toString() }
+
                 is CanonicalColumn.Bracketed, is CanonicalColumn.Padded ->
                     error("${adapter.emittedProfileName}: a level column has to be a Code or a Vocabulary")
             }

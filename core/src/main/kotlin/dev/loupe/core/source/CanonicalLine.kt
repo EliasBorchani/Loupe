@@ -48,8 +48,7 @@ object CanonicalLine {
      * The cheap structural pre-filter: the timestamp, plus just enough of the first column to reject
      * a line in a handful of byte comparisons.
      */
-    fun opensRegex(shape: CanonicalLineShape): String =
-        "^" + TIMESTAMP_REGEX + shape.columns.first().opensLiteral()
+    fun opensRegex(shape: CanonicalLineShape): String = "^" + TIMESTAMP_REGEX + shape.columns.first().opensLiteral()
 
     fun continuesRegex(): String = "^ {$TIMESTAMP_WIDTH}"
 }
@@ -118,8 +117,7 @@ sealed interface CanonicalColumn {
 
     /** Bracketed free text. See [CanonicalLineShape]'s init for what [mayContainBracket] costs. */
     class Bracketed(override val field: String, val mayContainBracket: Boolean) : CanonicalColumn {
-        override fun regexFragment(): String =
-            if (mayContainBracket) " \\[(?<$field>.*?)\\]" else " \\[(?<$field>[^\\]]*)\\]"
+        override fun regexFragment(): String = if (mayContainBracket) " \\[(?<$field>.*?)\\]" else " \\[(?<$field>[^\\]]*)\\]"
 
         override fun opensLiteral(): String = " \\["
     }

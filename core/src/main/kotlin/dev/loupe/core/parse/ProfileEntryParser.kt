@@ -1,8 +1,8 @@
 package dev.loupe.core.parse
 
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.LocalTimestampResolver
 import dev.loupe.core.profile.LevelDecoder
+import dev.loupe.core.profile.LocalTimestampResolver
 import java.util.regex.Matcher
 
 /**
@@ -67,6 +67,5 @@ class ProfileEntryParser(override val profile: CompiledProfile) : EntryParser {
         return true
     }
 
-    override fun isContinuation(buffer: ByteArray, start: Int, end: Int): Boolean =
-        profile.continues?.matches(buffer, start, end) ?: false
+    override fun isContinuation(buffer: ByteArray, start: Int, end: Int): Boolean = profile.continues?.matches(buffer, start, end) ?: false
 }

@@ -76,7 +76,12 @@ fun main(args: Array<String>) {
 private fun printMergeReport(totalBytes: Long) {
     val folder: File = prepareFolderFixture(totalBytes)
     println()
-    println("MERGED FOLDER — ${folder.listFiles().orEmpty().size} files, ${"%.2f".format(Locale.ROOT, folder.listFiles().orEmpty().sumOf { file -> file.length() } / BYTES_PER_MIB)} MiB total")
+    println(
+        "MERGED FOLDER — ${folder.listFiles().orEmpty().size} files, ${"%.2f".format(
+            Locale.ROOT,
+            folder.listFiles().orEmpty().sumOf { file -> file.length() } / BYTES_PER_MIB,
+        )} MiB total",
+    )
 
     var best: LogSource? = null
     repeat(RUNS_PER_STRATEGY) { run ->
@@ -136,12 +141,7 @@ private fun detectProfile(fixture: File): CompiledProfile {
     return chosen
 }
 
-private class StrategyResult(
-    val name: String,
-    val index: LogIndex,
-    val runNanos: List<Long>,
-    val heapBytesAfterIndex: Long,
-) {
+private class StrategyResult(val name: String, val index: LogIndex, val runNanos: List<Long>, val heapBytesAfterIndex: Long) {
     val coldNanos: Long get() = runNanos.first()
     val warmNanos: Long get() = runNanos.drop(1).minOrNull() ?: runNanos.first()
 }
@@ -182,7 +182,13 @@ private fun printIndexingReport(results: List<StrategyResult>, fileBytes: Long) 
     println("─".repeat(96))
     println(
         "%-30s %10s %10s %12s %12s %12s".format(
-            Locale.ROOT, "strategy", "cold", "warm", "ns/entry", "MiB/s", "heap delta",
+            Locale.ROOT,
+            "strategy",
+            "cold",
+            "warm",
+            "ns/entry",
+            "MiB/s",
+            "heap delta",
         ),
     )
     results.forEach { result ->
@@ -349,7 +355,11 @@ private fun printQueryReport(index: LogIndex, text: TextSources) {
         }
         println(
             "%-40s %10d %11.1f ms %11.1f ms".format(
-                Locale.ROOT, query, sequentialMatches, sequentialMillis, parallelMillis,
+                Locale.ROOT,
+                query,
+                sequentialMatches,
+                sequentialMillis,
+                parallelMillis,
             ),
         )
     }

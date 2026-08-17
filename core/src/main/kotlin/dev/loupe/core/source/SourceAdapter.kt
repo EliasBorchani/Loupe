@@ -119,6 +119,7 @@ object SourceAdapters {
      * KDocs and encoded a third time as the order of [all]; it is a check and a test now, and the
      * order carries no meaning.
      */
+
     /**
      * Profiles an adapter has spoken for. Kept out of detection — see [ProfileRegistry.excluding].
      *

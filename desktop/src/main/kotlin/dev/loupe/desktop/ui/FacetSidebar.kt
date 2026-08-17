@@ -20,9 +20,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -141,7 +141,10 @@ private fun FacetValues(
         dictionary.idsByDescendingCount()
             // Case-insensitively, like the tick mark below: a value selected in another case than
             // the dictionary holds was filtered out here and its ticked row never appeared.
-            .filter { id -> counts.getOrElse(id) { 0 } > 0 || selected.any { value -> value.equals(dictionary.valueOf(id), ignoreCase = true) } }
+            .filter { id ->
+                counts.getOrElse(id) { 0 } > 0 ||
+                    selected.any { value -> value.equals(dictionary.valueOf(id), ignoreCase = true) }
+            }
             .filter { id -> search.isEmpty() || dictionary.valueOf(id).contains(search, ignoreCase = true) }
             .toList()
     }
@@ -232,12 +235,7 @@ private const val TOP_N = 8
 private const val MAX_SEARCH_RESULTS = 40
 
 @Composable
-private fun FacetGroup(
-    title: String,
-    hasSelection: Boolean,
-    onClear: () -> Unit,
-    content: @Composable () -> Unit,
-) {
+private fun FacetGroup(title: String, hasSelection: Boolean, onClear: () -> Unit, content: @Composable () -> Unit) {
     val colors = LoupeTheme.colors
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.small, vertical = Spacing.small)) {
         Row(
@@ -259,14 +257,7 @@ private fun FacetGroup(
 }
 
 @Composable
-private fun FacetRow(
-    label: String,
-    count: Int,
-    peak: Int,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-) {
+private fun FacetRow(label: String, count: Int, peak: Int, selected: Boolean, accent: Color, onClick: () -> Unit) {
     val colors = LoupeTheme.colors
     Box(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         // The volume bar sits behind the label rather than beside it: the sidebar is a

@@ -87,8 +87,7 @@ class LogIndex(
     val estimatedHeapBytes: Long get() = entryCount.toLong() * bytesPerEntry(facetValues.size)
 
     /** Which file an entry came from. Always `0` when only one file is open. */
-    fun fileIdOf(entry: Int): Int =
-        if (fileFacetIndex == NO_FACET) 0 else facetValues[fileFacetIndex][entry]
+    fun fileIdOf(entry: Int): Int = if (fileFacetIndex == NO_FACET) 0 else facetValues[fileFacetIndex][entry]
 
     /**
      * The entries around [entry], **ignoring any filter**.
@@ -108,8 +107,7 @@ class LogIndex(
         facetIndexOf(name).takeIf { index -> index >= 0 }?.let { index -> facetDictionaries[index] }
 
     /** Density per time bucket, per severity, over every entry. */
-    fun timelineHistogram(bucketCount: Int): Array<IntArray> =
-        timelineHistogram(bucketCount, entries = null, entryCount = entryCount)
+    fun timelineHistogram(bucketCount: Int): Array<IntArray> = timelineHistogram(bucketCount, entries = null, entryCount = entryCount)
 
     /**
      * Density per time bucket, per severity — the data behind the brushable timeline strip.

@@ -68,17 +68,13 @@ object FacetCounts {
     }
 
     /** Everything the sidebar and the strip need, computed concurrently — independent passes. */
-    fun all(
-        index: LogIndex,
-        filter: EntryFilter,
-        text: TextSources?,
-        timelineBuckets: Int,
-    ): SidebarCounts = runBlocking(Dispatchers.Default) {
-        val levels = async { forLevels(index, filter, text) }
-        val timeline = async { timeline(index, filter, text, timelineBuckets) }
-        val facets = index.facets.indices.map { facetIndex -> async { forFacet(index, filter, text, facetIndex) } }
-        SidebarCounts(levels.await(), facets.awaitAll(), timeline.await())
-    }
+    fun all(index: LogIndex, filter: EntryFilter, text: TextSources?, timelineBuckets: Int): SidebarCounts =
+        runBlocking(Dispatchers.Default) {
+            val levels = async { forLevels(index, filter, text) }
+            val timeline = async { timeline(index, filter, text, timelineBuckets) }
+            val facets = index.facets.indices.map { facetIndex -> async { forFacet(index, filter, text, facetIndex) } }
+            SidebarCounts(levels.await(), facets.awaitAll(), timeline.await())
+        }
 }
 
 class SidebarCounts(

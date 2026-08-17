@@ -1,8 +1,8 @@
 package dev.loupe.core.parse
 
 import dev.loupe.core.profile.CompiledProfile
-import dev.loupe.core.profile.LocalTimestampResolver
 import dev.loupe.core.profile.LevelDecoder
+import dev.loupe.core.profile.LocalTimestampResolver
 
 /**
  * A hand-written scanner for the HealthMate format: no regex, no character decoding at all.
@@ -86,8 +86,7 @@ class ByteScannerEntryParser(override val profile: CompiledProfile) : EntryParse
         return true
     }
 
-    override fun isContinuation(buffer: ByteArray, start: Int, end: Int): Boolean =
-        WithingsFormat.isContinuationLine(buffer, start, end)
+    override fun isContinuation(buffer: ByteArray, start: Int, end: Int): Boolean = WithingsFormat.isContinuationLine(buffer, start, end)
 
     private fun fill(
         sink: ParsedEntry,
@@ -125,10 +124,9 @@ class ByteScannerEntryParser(override val profile: CompiledProfile) : EntryParse
     }
 
     /** Matches `" -> "`, the separator `render` writes between the header and the body. */
-    private fun isArrowAt(buffer: ByteArray, offset: Int, end: Int): Boolean =
-        offset + WithingsFormat.ARROW_LENGTH <= end &&
-            buffer[offset] == SPACE &&
-            buffer[offset + 1] == DASH &&
-            buffer[offset + 2] == GREATER_THAN &&
-            buffer[offset + 3] == SPACE
+    private fun isArrowAt(buffer: ByteArray, offset: Int, end: Int): Boolean = offset + WithingsFormat.ARROW_LENGTH <= end &&
+        buffer[offset] == SPACE &&
+        buffer[offset + 1] == DASH &&
+        buffer[offset + 2] == GREATER_THAN &&
+        buffer[offset + 3] == SPACE
 }

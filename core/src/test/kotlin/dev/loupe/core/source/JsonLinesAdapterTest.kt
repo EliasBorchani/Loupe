@@ -85,7 +85,10 @@ class JsonLinesAdapterTest {
         // an offset that is not the machine's, all landing on Europe/Paris wall-clock time.
         assertEquals("2026-08-17 12:48:55.293 ", prefixOf(write("a.ndjson", """{"ts":1786963735293,"msg":"epoch millis"}""")))
         assertEquals("2026-08-17 12:48:55.000 ", prefixOf(write("b.ndjson", """{"ts":1786963735,"msg":"epoch seconds"}""")))
-        assertEquals("2026-08-13 15:21:15.293 ", prefixOf(write("c.ndjson", """{"time":"2026-08-13T15:21:15.293+02:00","msg":"an offset"}""")))
+        assertEquals(
+            "2026-08-13 15:21:15.293 ",
+            prefixOf(write("c.ndjson", """{"time":"2026-08-13T15:21:15.293+02:00","msg":"an offset"}""")),
+        )
     }
 
     private fun prefixOf(file: File): String = convert(file).single().take(24)
@@ -186,5 +189,4 @@ class JsonLinesAdapterTest {
     private fun open(file: File): LogSource = LogSourceLoader.open(listOf(file))
 
     private fun write(name: String, vararg lines: String): File = writeLog(folder, name, *lines)
-
 }

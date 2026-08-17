@@ -142,14 +142,21 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
             scanner.expect(':')
             when (key) {
                 "logLevel" -> message.setLevel(scanner.readString())
+
                 "pid" -> message.pid = scanner.readLong()
+
                 "tid" -> message.tid = scanner.readLong()
+
                 "tag" -> message.tag = scanner.readString()
+
                 "applicationId" -> message.process = scanner.readString()
+
                 // Only used when there is no applicationId: the two were identical everywhere the
                 // format was checked, and the application id is the more meaningful of the pair.
                 "processName" -> if (message.process.isEmpty()) message.process = scanner.readString() else scanner.skipValue()
+
                 "timestamp" -> readTimestamp(scanner, message)
+
                 else -> scanner.skipValue()
             }
         } while (scanner.skipIf(','))
@@ -194,11 +201,17 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
         fun setLevel(logLevel: String) {
             level = when (logLevel) {
                 "VERBOSE" -> 'V'
+
                 "DEBUG" -> 'D'
+
                 "INFO" -> 'I'
+
                 "WARN" -> 'W'
+
                 "ERROR" -> 'E'
+
                 "ASSERT" -> 'A'
+
                 else -> {
                     // Android Studio's enum has exactly the six above. Anything else is shown as
                     // Info and counted, rather than written through as a letter the profile would

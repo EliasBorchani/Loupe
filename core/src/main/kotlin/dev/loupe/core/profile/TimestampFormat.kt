@@ -101,8 +101,11 @@ class TimestampFormat private constructor(
             var quoted = false
             while (index < pattern.length) {
                 val character: Char = pattern[index]
-                if (character == '\'') quoted = !quoted
-                else if (!quoted && character == 'y') return true
+                if (character == '\'') {
+                    quoted = !quoted
+                } else if (!quoted && character == 'y') {
+                    return true
+                }
                 index++
             }
             return false
@@ -198,11 +201,17 @@ class TimestampFormat private constructor(
             val value: Int = readDigits(chars, offset + slot.offset, slot.width)
             when (slot.kind) {
                 SlotKind.Year -> year = value
+
                 SlotKind.Month -> month = value
+
                 SlotKind.Day -> day = value
+
                 SlotKind.Hour -> hour = value
+
                 SlotKind.Minute -> minute = value
+
                 SlotKind.Second -> second = value
+
                 // `S` is fractional: `SS` means hundredths, `SSSSSS` microseconds.
                 SlotKind.Milli -> milli = scaleFractionToMillis(value, slot.width)
             }

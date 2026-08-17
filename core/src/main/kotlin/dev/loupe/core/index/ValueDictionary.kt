@@ -79,8 +79,7 @@ class ValueDictionary(expectedValues: Int = 64) {
     fun valueOf(id: Int): String = values[id]
 
     /** Ids ordered by descending count — the order the facet sidebar renders them in. */
-    fun idsByDescendingCount(): IntArray =
-        (0 until size).sortedByDescending { id -> valueCounts[id] }.toIntArray()
+    fun idsByDescendingCount(): IntArray = (0 until size).sortedByDescending { id -> valueCounts[id] }.toIntArray()
 
     /** Every distinct value, in first-seen order. */
     fun allValues(): List<String> = values

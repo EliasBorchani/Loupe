@@ -206,7 +206,12 @@ class QueryCompilerTest {
         // Then — dropped and reported, both times. Dropping a failed term is the documented policy;
         // doing it only sometimes was not.
         assertTrue(alone.problems.any { problem -> problem.contains("'category' needs a value") }, alone.problems.toString())
-        assertTrue(afterAFailure.problems.any { problem -> problem.contains("'category' needs a value") }, afterAFailure.problems.toString())
+        assertTrue(
+            afterAFailure.problems.any { problem ->
+                problem.contains("'category' needs a value")
+            },
+            afterAFailure.problems.toString(),
+        )
         assertEquals(CORPUS.size, select("category:").size)
         assertEquals(CORPUS.size, select("level:Nope category:").size)
     }

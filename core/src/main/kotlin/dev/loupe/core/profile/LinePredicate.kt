@@ -111,15 +111,16 @@ sealed interface LinePredicate {
             val escaped: Char = regexSource.getOrNull(index + 1) ?: return null
             return when (escaped) {
                 't' -> '\t'
+
                 // A backslash before punctuation is an escaped literal; before a letter it is a
                 // character class, which no single character can stand for.
                 in METACHARACTERS, '-', '/', '"', '\'' -> escaped
+
                 else -> null
             }
         }
 
-        private fun literalWidth(regexSource: String, index: Int): Int =
-            if (regexSource[index] == '\\') 2 else 1
+        private fun literalWidth(regexSource: String, index: Int): Int = if (regexSource[index] == '\\') 2 else 1
 
         /** @return the `{n}` repeat count at [index], `1` when there is none, `null` for `{n,m}`. */
         private fun readRepeat(regexSource: String, index: Int): Int? {

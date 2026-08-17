@@ -27,12 +27,7 @@ import java.io.File
  * as window-level handlers, scoped to the list that owns them.
  */
 @Composable
-fun FrameWindowScope.LoupeMenuBar(
-    state: LoupeState,
-    source: LogSource?,
-    viewMode: ViewMode,
-    queryFocus: FocusRequester,
-) {
+fun FrameWindowScope.LoupeMenuBar(state: LoupeState, source: LogSource?, viewMode: ViewMode, queryFocus: FocusRequester) {
     val isOpen: Boolean = source != null
 
     MenuBar {

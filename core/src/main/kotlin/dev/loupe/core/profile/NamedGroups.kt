@@ -23,7 +23,9 @@ object NamedGroups {
 
         while (index < regexSource.length) {
             when (regexSource[index]) {
-                '\\' -> index++ // whatever follows is a literal, never a group opener
+                '\\' -> index++
+
+                // whatever follows is a literal, never a group opener
 
                 '[' -> if (!insideCharacterClass) insideCharacterClass = true
 
@@ -58,6 +60,5 @@ object NamedGroups {
     }
 
     /** A plain `(` captures; `(?:`, `(?=`, `(?i)` and friends do not. */
-    private fun isCapturing(regexSource: String, openingParenthesis: Int): Boolean =
-        regexSource.getOrNull(openingParenthesis + 1) != '?'
+    private fun isCapturing(regexSource: String, openingParenthesis: Int): Boolean = regexSource.getOrNull(openingParenthesis + 1) != '?'
 }

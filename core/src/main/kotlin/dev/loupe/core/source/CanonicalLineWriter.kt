@@ -43,12 +43,7 @@ class CanonicalLineWriter internal constructor(
          *
          * Owns the reader/writer pair and their buffers, which both adapters used to declare inline.
          */
-        fun <T> render(
-            source: File,
-            destination: File,
-            shape: CanonicalLineShape,
-            body: (Reader, CanonicalLineWriter) -> T,
-        ): T =
+        fun <T> render(source: File, destination: File, shape: CanonicalLineShape, body: (Reader, CanonicalLineWriter) -> T): T =
             BufferedReader(InputStreamReader(source.inputStream(), StandardCharsets.UTF_8), BUFFER_BYTES).use { reader ->
                 BufferedWriter(OutputStreamWriter(destination.outputStream(), StandardCharsets.UTF_8), BUFFER_BYTES).use { sink ->
                     body(reader, CanonicalLineWriter(shape, sink, ZoneId.systemDefault()))

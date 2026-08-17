@@ -1,12 +1,12 @@
 package dev.loupe.desktop.ui
 
-import androidx.compose.foundation.VerticalScrollbar
-import androidx.compose.foundation.background
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,12 +37,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,14 +51,13 @@ import dev.loupe.core.index.LogIndex
 import dev.loupe.core.source.EntryRenderer
 import dev.loupe.core.source.LogSource
 import dev.loupe.core.source.RenderedEntry
+import dev.loupe.desktop.format.Formatters
 import dev.loupe.desktop.state.Results
 import dev.loupe.desktop.state.Selection
 import dev.loupe.desktop.state.ViewMode
-import dev.loupe.desktop.format.Formatters
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
 import kotlinx.coroutines.flow.distinctUntilChanged
-
 
 private val TIME_WIDTH = 84.dp
 
@@ -174,14 +173,22 @@ fun LogList(
                     val page: Int = maxOf(1, listState.layoutInfo.visibleItemsInfo.size - 1)
                     when {
                         event.isMetaPressed && event.key == Key.A -> onSelectAll()
+
                         event.isMetaPressed && event.key == Key.C -> onCopy()
+
                         event.key == Key.DirectionDown || event.key == Key.J -> onMoveSelection(1, event.isShiftPressed)
+
                         event.key == Key.DirectionUp || event.key == Key.K -> onMoveSelection(-1, event.isShiftPressed)
+
                         event.key == Key.PageDown -> onMoveSelection(page, event.isShiftPressed)
+
                         event.key == Key.PageUp -> onMoveSelection(-page, event.isShiftPressed)
+
                         // Home and End are a page move large enough to hit the end, which stops there.
                         event.key == Key.MoveHome -> onMoveSelection(-results.matchCount, event.isShiftPressed)
+
                         event.key == Key.MoveEnd -> onMoveSelection(results.matchCount, event.isShiftPressed)
+
                         // Anything else belongs to whoever asked for it — a swallowed key is worse
                         // than an unhandled one.
                         else -> return@onPreviewKeyEvent false
@@ -218,7 +225,9 @@ fun LogList(
                                     // The focused row is the one the detail pane describes, so it reads
                                     // a shade stronger than the rest of the run.
                                     focused -> colors.accentSoft
+
                                     selected -> colors.accentSoft.copy(alpha = 0.55f)
+
                                     else -> colors.surfaceForLevel(ordinal, levelCount)
                                 },
                             )

@@ -1,10 +1,10 @@
 package dev.loupe.core.source
 
 import dev.loupe.core.index.LogIndex
-import dev.loupe.core.testing.writeLog
 import dev.loupe.core.io.MappedText
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
+import dev.loupe.core.testing.writeLog
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows

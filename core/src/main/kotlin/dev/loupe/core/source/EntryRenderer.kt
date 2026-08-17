@@ -10,11 +10,7 @@ import dev.loupe.core.profile.CompiledProfile
  * [message] is the profile's message group; [continuations] are the wrapped lines and stack-trace
  * frames that belong to the same entry, with the declared indent stripped.
  */
-class RenderedEntry(
-    val raw: String,
-    val message: String,
-    val continuations: List<String>,
-) {
+class RenderedEntry(val raw: String, val message: String, val continuations: List<String>) {
     val hasContinuations: Boolean get() = continuations.isNotEmpty()
 }
 
@@ -27,8 +23,7 @@ class RenderedEntry(
  */
 object EntryRenderer {
 
-    fun render(source: LogSource, entry: Int): RenderedEntry =
-        render(profile = source.profile, raw = source.rawText(entry))
+    fun render(source: LogSource, entry: Int): RenderedEntry = render(profile = source.profile, raw = source.rawText(entry))
 
     fun render(profile: CompiledProfile, raw: String): RenderedEntry {
         val lines: List<String> = raw.split('\n')
