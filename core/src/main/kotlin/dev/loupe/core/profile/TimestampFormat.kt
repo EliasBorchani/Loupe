@@ -1,6 +1,5 @@
 package dev.loupe.core.profile
 
-import dev.loupe.core.parse.LocalTimestampResolver
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter

@@ -1,6 +1,7 @@
 package dev.loupe.core.parse
 
 import dev.loupe.core.profile.CompiledProfile
+import dev.loupe.core.profile.LocalTimestampResolver
 import dev.loupe.core.profile.LevelDecoder
 
 /**

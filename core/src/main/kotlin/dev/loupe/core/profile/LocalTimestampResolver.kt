@@ -1,4 +1,4 @@
-package dev.loupe.core.parse
+package dev.loupe.core.profile
 
 import java.time.LocalDateTime
 import java.time.ZoneId

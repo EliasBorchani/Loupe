@@ -1,6 +1,5 @@
 package dev.loupe.core.profile
 
-import dev.loupe.core.parse.LocalTimestampResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
