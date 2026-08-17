@@ -60,6 +60,11 @@ the KDoc at the site; this is the index.
 - **The merge never sorts.** Each file is already ascending, so `IndexMerger` is a k-way merge over a
   binary heap. It remaps dictionary ids rather than re-interning.
 
+**Determinism**
+- **Tests are pinned to `user.timezone=Europe/Paris`** in the root build, and the compiler runs with
+  `allWarningsAsErrors`. Both exist because CI caught what a laptop could not: a test that agreed
+  with itself only under CEST, and warnings nobody read.
+
 **Packaging**
 - **jpackage copies a JDK into the bundle**, so the build JDK's provenance becomes the app's. The
   Compose plugin refuses Homebrew's outright and is right to; Gradle provisions an Adoptium 17 into

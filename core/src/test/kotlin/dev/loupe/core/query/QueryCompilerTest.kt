@@ -27,7 +27,16 @@ class QueryCompilerTest {
         private val WITHINGS: CompiledProfile = ProfileRegistry.bundled().profiles
             .single { profile -> profile.name == "withings-healthmate" }
 
-        private val ZONE: ZoneId = ZoneId.of("Europe/Paris")
+        /**
+         * The machine's zone, deliberately — not a fixed one.
+         *
+         * The bundled profile declares `zone = "local"`, so the index is built in the machine's
+         * zone; pinning the *query* side to Europe/Paris made `since:11:00` mean something else
+         * from the timestamps it was compared against. It agreed on a CEST laptop and failed on a
+         * UTC runner. The two sides have to read the same clock, and `Test { systemProperty
+         * "user.timezone" }` fixes which clock that is.
+         */
+        private val ZONE: ZoneId = ZoneId.systemDefault()
 
         /** One line per message below, so an assertion can name what it expects. */
         private val CORPUS: List<String> = listOf(

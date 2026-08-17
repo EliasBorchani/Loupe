@@ -70,6 +70,17 @@ lines.forEach { line ->
 }
 ```
 
+## The machine must not change the answer
+
+Tests run with `user.timezone=Europe/Paris`, pinned in the root build. A test that reads the
+machine's clock passes on the laptop that wrote it and fails on a UTC runner — which is exactly how
+`an absolute time window bounds the range` got through review: it pinned the *query* side to
+Europe/Paris while the bundled profile parses `zone = "local"`, so the two only agreed by accident.
+
+Paris rather than UTC on purpose: pinning to UTC would hide any code that assumes local *is* UTC,
+which is the mistake worth catching. Same rule for anything else ambient — locale, the home
+directory, the current year. If a test would answer differently on another machine, pin it.
+
 ## What is not covered, and why
 Layout. `LoupeStateTest` drives the whole interaction loop — open, type, tick a facet, brush the
 timeline — without a window, because everything the UI does goes through `LoupeState`. What no test
