@@ -34,5 +34,8 @@ subprojects {
         // assumes local *is* UTC, which is the mistake worth catching. It also observes DST, and
         // it is the author's own zone, so a failure reproduces locally without setting anything.
         systemProperty("user.timezone", "Europe/Paris")
+        // So a test can read the README rather than paraphrase it: a Test task's working
+        // directory is the module, not the repository.
+        systemProperty("loupe.repositoryRoot", rootDir.absolutePath)
     }
 }

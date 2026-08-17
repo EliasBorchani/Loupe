@@ -10,7 +10,7 @@ les copier, se déplacer au clavier, voir ce qui entourait une ligne, et sortir 
 ## La sélection, écrite à la main
 
 `SelectionContainer` sur `LazyColumn` est instable sur Compose Desktop. Le risque était identifié
-au PRD avant la première ligne de code, il n'a pas bougé, donc le modèle est fait main.
+avant la première ligne de code, il n'a pas bougé, donc le modèle est fait main.
 
 **C'est une plage, pas un ensemble**, parce que c'est ce que produisent les gestes : clic,
 `⇧`+clic, extension à la flèche. Et elle est tenue en **positions dans le résultat, pas en index
@@ -47,7 +47,7 @@ mille lignes de fixture.
 
 ## Le contexte non filtré
 
-L'étape 6 du scénario nominal du PRD. Ce qui s'est passé autour d'une ligne est en général la raison
+L'étape 6 du scénario nominal. Ce qui s'est passé autour d'une ligne est en général la raison
 pour laquelle elle s'est passée, et le filtre l'a par définition caché. La bascule `context ±20` du
 panneau de détail lit **l'index, pas le résultat** : avec `level:E` à l'écran, c'est là que sont les
 lignes Debug qui ont mené à l'erreur.

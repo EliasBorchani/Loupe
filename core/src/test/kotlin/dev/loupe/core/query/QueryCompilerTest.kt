@@ -38,6 +38,16 @@ class QueryCompilerTest {
          */
         private val ZONE: ZoneId = ZoneId.systemDefault()
 
+        /**
+         * The first code block a visitor to the repository sees.
+         *
+         * It read `cat:Sync` until it was found to be fiction: `resolveFacetIndex` matches a facet's
+         * name or its label and there is no alias table, so the headline example answered "Unknown
+         * field 'cat'". Every test wrote `category:`, so nothing caught it. Now the example is
+         * compiled here, and pinned to the file it is quoted from.
+         */
+        private const val README_EXAMPLE: String = "level>=W category:Sync since:-2h \"timeout\""
+
         /** One line per message below, so an assertion can name what it expects. */
         private val CORPUS: List<String> = listOf(
             "2026-07-22 10:00:00.000 [V] [Wpp] [Session] -> frame-in",
@@ -69,6 +79,22 @@ class QueryCompilerTest {
     @Test
     fun `an empty query keeps everything`() {
         assertEquals(CORPUS.size, select("").size)
+    }
+
+    @Test
+    fun `the example in the README compiles with no problems`() {
+        // Given
+        val readme = File(System.getProperty("loupe.repositoryRoot"), "README.md")
+
+        // When
+        val compiled: CompiledQuery = compiler.compile(README_EXAMPLE)
+
+        // Then — a documented example that is also a test cannot rot.
+        assertEquals(emptyList<String>(), compiled.problems)
+        assertTrue(
+            readme.readText().contains(README_EXAMPLE),
+            "README.md no longer quotes '$README_EXAMPLE'. Update the constant — and check the new text compiles.",
+        )
     }
 
     @Test

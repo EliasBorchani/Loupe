@@ -126,7 +126,7 @@ sealed interface QueryToken {
     /** Offset one past the token's last character. */
     val end: Int
 
-    /** `level>=W`, `cat:Sync,Wpp`, `-tag:~Aggregate`, `since:-2h`. */
+    /** `level>=W`, `category:Sync,Wpp`, `-tag:~Aggregate`, `since:-2h`. */
     data class Field(
         val field: String,
         val comparison: Comparison,

@@ -11,7 +11,7 @@ throws that structure away and hands you back a wall of text to `grep`. Loupe re
 and turns it into filters:
 
 ```
-level>=W cat:Sync since:-2h "timeout"
+level>=W category:Sync since:-2h "timeout"
 ```
 
 Ticking a facet writes into the query bar rather than into a hidden selection model, so the syntax
@@ -91,7 +91,6 @@ the two cannot drift. See [`docs/packaging.md`](docs/packaging.md).
 | **M4** | Public — bundled profiles, CI, packaging, release automation | ✅ done |
 | | Left: Apple notarisation, which needs a Developer ID certificate | |
 
-Full product spec (in French): [`docs/PRD.fr.md`](docs/PRD.fr.md).
 
 ## Licence
 

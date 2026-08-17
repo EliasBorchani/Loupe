@@ -20,7 +20,7 @@ ce parseur par un moteur qui ne connaît aucun format : tout vient d'un `*.logpr
 | Auto-détection | `profile/ProfileRegistry.kt` | Score par échantillon, jamais un choix silencieux |
 | Parseur générique | `parse/ProfileEntryParser.kt` | Remplace la stratégie A du M0 |
 | Index générique | `index/LogIndex.kt` | N colonnes de facettes déclarées, plus « catégorie + tag » en dur |
-| Langage de requête | `query/QueryLexer.kt`, `query/QueryCompiler.kt` | La grammaire du §7 du PRD → `EntryFilter` |
+| Langage de requête | `query/QueryLexer.kt`, `query/QueryCompiler.kt` | La grammaire de la barre de requête → `EntryFilter` |
 
 **56 tests**, dont chaque cas du format Withings rejoué contre les deux parseurs.
 

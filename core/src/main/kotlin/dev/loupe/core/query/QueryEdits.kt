@@ -58,7 +58,7 @@ object QueryEdits {
 
     /**
      * Terms this class is willing to rewrite: same field, not negated, and a comparison it can
-     * round-trip. A `-cat:Ui` or a `level<D` is left alone and a new term is added beside it —
+     * round-trip. A `-category:Ui` or a `level<D` is left alone and a new term is added beside it —
      * silently rewriting something the user typed deliberately would be worse than a redundant term.
      */
     private fun editableTermsFor(query: String, field: String): List<QueryToken.Field> =

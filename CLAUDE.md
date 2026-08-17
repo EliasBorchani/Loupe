@@ -189,12 +189,11 @@ recognise, so it exercises the merge and the skip path.
 
 | | |
 |---|---|
-| `docs/PRD.fr.md` | The product spec — users, differentiation, scope, milestones. Start here. |
 | `docs/m0-perf-spike.md` | Why the engine looks like this, and the numbers behind every claim. |
 | `docs/m1-core.md` | The profile system, and the exact-vs-necessary predicate distinction. |
 | `docs/m2-ui.md` | The three UI forks, decided, and what the screen deliberately does not do. |
 | `docs/m3-product.md` | Selection, keyboard, context and export — and why the clipboard is capped. |
-| `docs/m4-public.md` | The four bundled profiles, the two bugs they found, and why there is no JSON one. |
+| `docs/m4-public.md` | The bundled profiles, and the two bugs writing them found. |
 | `docs/profiles.md` | How to write a profile. The public-facing one; English. |
 | `docs/packaging.md` | Why the packaging config looks like that, and the notarisation checklist. |
 | `profiles/withings.logprofile.toml` | The reference profile, heavily commented. |
@@ -209,7 +208,7 @@ the mapping would add a boundary case to every read for a file nobody has. Revis
 
 - **Multi-select and copy.** One click selects one entry, `↑`/`↓` move through the result. The
   click / `⇧`-click / `⌘A` model has to be hand-written: `SelectionContainer` over `LazyColumn` is
-  unstable on Compose Desktop, and that risk was called in the PRD before any of this was written.
+  unstable on Compose Desktop — a risk called before the first line of this was written.
 - More shortcuts (`⌘F`, `⌘L`, `j`/`k`, `Page↑`/`Page↓` — `moveSelection` already does the work),
   export of the current filter, unfiltered ±N lines of context around the selected entry,
   horizontal scrolling of the list.

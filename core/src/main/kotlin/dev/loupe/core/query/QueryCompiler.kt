@@ -17,10 +17,10 @@ import java.util.regex.PatternSyntaxException
  * Turns a query string into an [EntryFilter], against a specific index.
  *
  * It needs the index because a facet term has to be resolved to dictionary ids — which is also
- * what makes `cat:Snyc` reportable as a typo rather than as zero results.
+ * what makes `category:Snyc` reportable as a typo rather than as zero results.
  *
- * Terms are ANDed. Values inside one term are ORed (`cat:Sync,Wpp`). Two terms on the same facet
- * intersect, so `cat:Sync cat:Wpp` matches nothing and says so.
+ * Terms are ANDed. Values inside one term are ORed (`category:Sync,Wpp`). Two terms on the same facet
+ * intersect, so `category:Sync category:Wpp` matches nothing and says so.
  *
  * Nothing here fails hard: an unknown field or an unparsable date becomes a [problems] entry and
  * the rest of the query still compiles, because the user is typing and half a query should still

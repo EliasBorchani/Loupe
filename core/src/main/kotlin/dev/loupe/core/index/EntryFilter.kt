@@ -12,11 +12,11 @@ import java.util.regex.Pattern
  *
  * [accepted] is indexed by dictionary id, so the test is an array read rather than a set lookup.
  * Negation is compiled away by inverting the array — the filter never needs to know that
- * `-cat:Ui` was written with a minus.
+ * `-category:Ui` was written with a minus.
  */
 class FacetConstraint(
     val accepted: BooleanArray,
-    /** Whether an entry whose facet group did not match at all passes. `-cat:Ui` says yes. */
+    /** Whether an entry whose facet group did not match at all passes. `-category:Ui` says yes. */
     val acceptMissing: Boolean,
 )
 

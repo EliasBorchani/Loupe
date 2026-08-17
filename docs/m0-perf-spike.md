@@ -1,6 +1,6 @@
 # M0 — Spike de performance
 
-**Verdict : le design déclaratif tient. Le risque n°1 du PRD est levé.**
+**Verdict : le design déclaratif tient. Le risque n°1 est levé.**
 
 Une seule question était posée : un moteur générique piloté par des profils regex peut-il indexer
 ~5 M d'entrées en moins de 5 s sur la JVM, ou faut-il renoncer au déclaratif et compiler des
@@ -47,7 +47,7 @@ formes limites. Une stratégie rapide et fausse ne vaut rien ; la comparaison to
 
 | | |
 |---|---|
-| Delta de tas mesuré | **258 MiB** pour 9,01 M entrées, soit **30,0 octets/entrée** (estimation du PRD : 33) |
+| Delta de tas mesuré | **258 MiB** pour 9,01 M entrées, soit **30,0 octets/entrée** (estimation initiale : 33) |
 | Texte | hors tas — le 1 GiB reste dans le fichier, atteint par `(offset, longueur)` |
 | Extrapolé à 5 M | ≈ **143 MiB** |
 | Cible RSS < 500 Mo | ✅ |
@@ -59,8 +59,8 @@ formes limites. Une stratégie rapide et fausse ne vaut rien ; la comparaison to
 | Requête | Résultats | 1 thread | Parallèle | Cible |
 |---|---:|---:|---:|:---:|
 | `level>=W` | 926 146 | 7,8 ms | **1,3 ms** | < 100 ms ✅ |
-| `cat:Sync` | 2 105 017 | 22,9 ms | **6,4 ms** | < 100 ms ✅ |
-| `level>=W cat:Sync` + fenêtre 1 h | 2 910 | 8,0 ms | **1,0 ms** | < 100 ms ✅ |
+| `category:Sync` | 2 105 017 | 22,9 ms | **6,4 ms** | < 100 ms ✅ |
+| `level>=W category:Sync` + fenêtre 1 h | 2 910 | 8,0 ms | **1,0 ms** | < 100 ms ✅ |
 | plein texte `"connected"` | 899 314 | 658,7 ms | **116,5 ms** | < 500 ms ✅ |
 | `level>=W "backoff"` | 89 655 | 224,7 ms | **18,7 ms** | < 500 ms ✅ |
 | Histogramme timeline (2000 buckets × 5 niveaux) | — | 18,0 ms | — | — |

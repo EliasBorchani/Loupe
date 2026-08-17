@@ -330,7 +330,7 @@ class LoupeState(private val scope: CoroutineScope) {
     /**
      * The entries around the focused row, ignoring the filter.
      *
-     * Step 6 of the PRD's scenario: what happened around a line is usually why it happened, and the
+     * What happened around a line is usually why it happened, and the
      * query has by definition hidden it.
      */
     fun contextAround(entry: Int, radius: Int = CONTEXT_RADIUS): IntRange =

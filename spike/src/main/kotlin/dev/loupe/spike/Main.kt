@@ -152,7 +152,7 @@ private fun printIndexingReport(results: List<StrategyResult>, fileBytes: Long) 
 
     val budgetNanos: Long = 5_000_000_000L
     println()
-    println("Extrapolated to the PRD's 5 M-entry target (budget ${budgetNanos / 1_000_000_000}s):")
+    println("Extrapolated to the 5 M-entry target (budget ${budgetNanos / 1_000_000_000}s):")
     results.forEach { result ->
         val nanos: Double = result.warmNanos.toDouble() / result.index.entryCount * 5_000_000
         println("  %-30s %6.2fs   %s".format(Locale.ROOT, result.name, nanos / 1e9, if (nanos <= budgetNanos) "PASS" else "FAIL"))
