@@ -5,6 +5,10 @@ serialization = "1.11.0"
 ktoml = "0.7.0"
 compose = "1.11.1"
 jupiter = "6.1.2"
+spotless = "8.10.0"
+# The engine Spotless drives, pinned rather than left to Spotless's own default: otherwise a Spotless
+# upgrade reformats the repository as a side effect. The two move deliberately, and together.
+ktlint = "1.8.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -22,3 +26,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

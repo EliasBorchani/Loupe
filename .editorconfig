@@ -1,0 +1,32 @@
+# Editor settings. NOT the formatter's settings.
+#
+# Spotless 8.10 ignores this file for its ktlint step — `setEditorConfigPath` was measured against
+# `indent_size` 4 and 8 here and produced byte-identical output. ktlint's rules are configured in
+# the `editorConfigOverride` map in `build.gradle.kts`, which is the only thing that reaches it.
+# The two are written to agree; if you change the indent, change it in both.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+max_line_length = 140
+
+[*.toml]
+indent_style = space
+indent_size = 2
+
+[*.md]
+# A hard wrap is deliberate in this repository's prose, and two trailing spaces are Markdown's line
+# break. Neither survives a trimmer.
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
