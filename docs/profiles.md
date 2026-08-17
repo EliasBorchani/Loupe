@@ -201,3 +201,9 @@ export. A JSON document of some other shape still needs one written for it.
 
 **A field that is not on the entry's first line.** Everything parsed comes from the opening line;
 continuation lines are text, not structure.
+
+**Its own colours, or a closed set of facet values.** Severity colour is positional — the top of the
+declared `order` is the error colour, the one below it the warning colour — so a profile chooses its
+colours by choosing its scale, and nothing else. `colors` and `values` keys used to be accepted here
+and silently ignored; they are now rejected, because a key that parses and does nothing is worse than
+one that fails.

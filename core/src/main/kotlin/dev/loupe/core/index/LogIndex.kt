@@ -58,7 +58,6 @@ class LogIndex(
             label = "File",
             group = CompiledProfile.NO_GROUP,
             mode = FacetMode.Always,
-            declaredValues = null,
         )
 
         /** ts + level + offset + length, plus one Int per facet column. */

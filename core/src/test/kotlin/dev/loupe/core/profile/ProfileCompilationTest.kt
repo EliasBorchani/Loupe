@@ -261,6 +261,29 @@ class ProfileCompilationTest {
         }
 
         @Test
+        fun `refuses a key the format does not have`() {
+            // Given — `colors` and `values` were accepted here and then read by nothing, for four
+            // milestones. Removing them is only safe because an unknown key fails loudly; if it were
+            // ignored, every profile that still declares one would silently lose the meaning it
+            // thought it had.
+            val source: String = """
+                name = "stale"
+                [parse]
+                regex = '''^(?<ts>\S+) (?<message>.*)${'$'}{'$'}'''
+                [fields.ts]
+                role = "timestamp"
+                format = "yyyy-MM-dd"
+                [fields.message]
+                role = "message"
+                colors = { W = "warning" }
+            """.trimIndent()
+
+            // When / Then
+            val failure: Exception = assertThrows(Exception::class.java) { CompiledProfile.parse(source) }
+            assertTrue(failure.message.orEmpty().contains("colors"), failure.message)
+        }
+
+        @Test
         fun `refuses a level field with no scale`() {
             // Given
             val spec = CompiledProfile.parse(

@@ -43,19 +43,10 @@ zone   = "local"   # FileLogger writes the device's local time, with no offset i
 role   = "level"
 order  = ["V", "D", "I", "W", "E"]   # declaration order is severity order — enables `level>=W`
 labels = { V = "Verbose", D = "Debug", I = "Info", W = "Warn", E = "Error" }
-colors = { W = "warning", E = "error" }
 
 [fields.category]
 role  = "facet"
 label = "Category"
-# Not needed to disambiguate the optional group — the regex handles that. Kept because it orders
-# the facet and flags a malformed line whose category is not one the app can emit.
-values = [
-  "AggregateComputation", "Analytics", "Billing", "BleNetwork", "BodyBalance",
-  "Database", "Datastore", "HealthConnect", "MeasurementPlan", "Measurements",
-  "Migration", "Network", "Other", "Push", "SleepTrackComputation", "Sync",
-  "Tls", "Ui", "Unknown", "Vo2Max", "Wpp", "Zendesk",
-]
 
 [fields.tag]
 role  = "facet"

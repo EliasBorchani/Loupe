@@ -77,9 +77,6 @@ data class FieldSpec(
     /** [FieldRole.Level] only — captured values in **ascending severity**. Enables `level>=W`. */
     val order: List<String>? = null,
     val labels: Map<String, String> = emptyMap(),
-    val colors: Map<String, String> = emptyMap(),
-    /** [FieldRole.Facet] only — the closed set of values, used to order the facet and flag typos. */
-    val values: List<String>? = null,
     val facet: FacetMode = FacetMode.Auto,
 )
 

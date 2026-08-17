@@ -132,7 +132,6 @@ class CompiledProfile private constructor(
                         label = field.label ?: fieldName,
                         group = groupIndexes.getValue(fieldName),
                         mode = field.facet,
-                        declaredValues = field.values,
                     )
                 }
 
@@ -227,8 +226,6 @@ class CompiledFacet(
     /** Group number in [CompiledProfile.pattern]. */
     val group: Int,
     val mode: FacetMode,
-    /** Closed value set, when the profile declares one. Orders the sidebar and flags typos. */
-    val declaredValues: List<String>?,
 )
 
 class CompiledMarker(val pattern: Pattern, val role: MarkerRole)
