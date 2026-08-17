@@ -2,6 +2,7 @@ package dev.loupe.desktop
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,20 +14,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isMetaPressed
@@ -37,9 +41,6 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -55,23 +56,24 @@ import dev.loupe.desktop.theme.Spacing
 import dev.loupe.desktop.ui.DetailPane
 import dev.loupe.desktop.ui.Divider
 import dev.loupe.desktop.ui.FacetSidebar
+import dev.loupe.desktop.ui.Loaded
 import dev.loupe.desktop.ui.LogList
+import dev.loupe.desktop.ui.Opening
 import dev.loupe.desktop.ui.ParseReportPane
 import dev.loupe.desktop.ui.QueryBar
 import dev.loupe.desktop.ui.SourceHeader
 import dev.loupe.desktop.ui.StatusBar
 import dev.loupe.desktop.ui.TimelineStrip
 import dev.loupe.desktop.ui.VerticalDivider
-import androidx.compose.runtime.collectAsState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import dev.loupe.desktop.ui.Welcome
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.io.File
 import javax.swing.JFileChooser
 import javax.swing.UIManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
-private val SIDEBAR_WIDTH = 224.dp
 
 fun main(args: Array<String>) {
     // Native-feeling menu bar and window title on macOS.
@@ -188,215 +190,6 @@ private fun LoupeApp(
     }
 }
 
-@Composable
-private fun Loaded(
-    state: LoupeState,
-    source: LogSource,
-    results: Results?,
-    query: String,
-    viewMode: ViewMode,
-    selection: Selection?,
-    notice: String?,
-    showParseReport: Boolean,
-    expandedEntries: Set<Int>,
-    queryFocus: FocusRequester,
-    onCopyText: (String) -> Unit,
-) {
-    val catchingUp: Boolean = state.isCatchingUp(results)
-    val scope: CoroutineScope = rememberCoroutineScope()
-    val copySelection: () -> Unit = { scope.launch { state.copySelection()?.let(onCopyText) } }
-    // The row the detail pane describes: the moving end of the selection.
-    val focusedEntry: Int? = results
-        ?.takeIf { current -> current.matchCount > 0 }
-        ?.let { current -> selection?.focus?.takeIf { focus -> focus in 0 until current.matchCount }?.let(current.matches::get) }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        SourceHeader(
-            source = source,
-            onOpen = { chooseAndOpen(state, add = false) },
-            onAdd = { chooseAndOpen(state, add = true) },
-            onExport = { chooseExportTarget(source)?.let(state::export) },
-        )
-        Divider()
-
-        QueryBar(
-            query = query,
-            onQueryChange = state::setQuery,
-            matchCount = results?.matchCount ?: 0,
-            totalCount = source.index.entryCount,
-            problems = results?.problems.orEmpty(),
-            catchingUp = catchingUp,
-            focusRequester = queryFocus,
-        )
-        Divider()
-
-        Row(modifier = Modifier.weight(1f)) {
-            if (results != null) {
-                FacetSidebar(
-                    source = source,
-                    results = results,
-                    query = query,
-                    onToggleValue = state::toggleFacetValue,
-                    onClearField = state::clearField,
-                    modifier = Modifier.width(SIDEBAR_WIDTH).fillMaxSize(),
-                )
-                VerticalDivider()
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                if (results != null) {
-                    TimelineStrip(
-                        source = source,
-                        results = results,
-                        onBrush = state::setTimeWindow,
-                    )
-                    Divider()
-                    LogList(
-                        source = source,
-                        results = results,
-                        viewMode = viewMode,
-                        selection = selection,
-                        expandedEntries = expandedEntries,
-                        onSelectAt = state::selectAt,
-                        onExtendTo = state::extendTo,
-                        onToggleExpanded = state::toggleExpanded,
-                        onMoveSelection = state::moveSelection,
-                        onSelectAll = state::selectAll,
-                        onCopy = copySelection,
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        BasicText("indexing…", style = LoupeTheme.type.ui.copy(color = LoupeTheme.colors.inkTertiary))
-                    }
-                }
-            }
-        }
-
-        // One bottom slot, one thing in it: the selected entry, or why some lines are unaccounted for.
-        when {
-            showParseReport -> {
-                Divider()
-                ParseReportPane(
-                    report = source.index.unrecognised,
-                    totalLines = source.index.lineCount,
-                    profileProblems = source.profileProblems,
-                    fileNameOf = { fileId -> source.files.getOrNull(fileId)?.name ?: "?" },
-                    onClose = { state.showParseReport(false) },
-                )
-            }
-
-            focusedEntry != null -> {
-                Divider()
-                DetailPane(
-                    source = source,
-                    entry = focusedEntry,
-                    context = state.contextAround(focusedEntry),
-                    onClose = state::clearSelection,
-                    onCopy = copySelection,
-                )
-            }
-        }
-
-        Divider()
-        StatusBar(
-            source = source,
-            results = results,
-            catchingUp = catchingUp,
-            selectionSize = selection?.size ?: 0,
-            notice = notice,
-            hasProfileProblems = source.profileProblems.isNotEmpty(),
-            viewMode = viewMode,
-            onViewModeChange = state::setViewMode,
-            onShowParseReport = { state.showParseReport(true) },
-        )
-    }
-}
-
-@Composable
-private fun Welcome(failure: String?, onOpen: () -> Unit) {
-    val colors = LoupeTheme.colors
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BasicText("Loupe", style = LoupeTheme.type.uiStrong.copy(color = colors.ink, fontSize = 28.sp))
-            BasicText(
-                text = "Drop a log file or a folder of them.",
-                style = LoupeTheme.type.ui.copy(color = colors.inkSecondary),
-                modifier = Modifier.padding(top = Spacing.small),
-            )
-            BasicText(
-                text = "open…",
-                style = LoupeTheme.type.uiStrong.copy(color = colors.onAccent),
-                modifier = Modifier
-                    .padding(top = Spacing.large)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(colors.accent)
-                    .clickable(onClick = onOpen)
-                    .padding(horizontal = Spacing.large, vertical = Spacing.small),
-            )
-            if (failure != null) {
-                BasicText(
-                    text = failure,
-                    style = LoupeTheme.type.uiSmall.copy(color = colors.error),
-                    modifier = Modifier.padding(top = Spacing.large).width(520.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun Opening(status: OpenStatus.Working) {
-    val colors = LoupeTheme.colors
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BasicText(
-                text = when (status.phase) {
-                    OpenPhase.Converting -> "converting to text…"
-                    OpenPhase.Detecting -> "recognising the format…"
-                    OpenPhase.Indexing -> "indexing…"
-                    OpenPhase.Merging -> "merging files…"
-                },
-                style = LoupeTheme.type.ui.copy(color = colors.inkSecondary),
-            )
-            Box(
-                modifier = Modifier
-                    .padding(top = Spacing.medium)
-                    .width(320.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(colors.sunken)
-                    .drawBehind {
-                        drawRect(color = colors.accent, size = Size(size.width * status.fraction, size.height))
-                    },
-            ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp))
-            }
-        }
-    }
-}
-
-internal fun chooseAndOpen(state: LoupeState, add: Boolean) {
-    runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
-    val chooser = JFileChooser().apply {
-        // Day files are named `2026-06-02` with no extension, and a folder of them is the normal
-        // case — so both must be selectable, and nothing may filter on a suffix.
-        fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
-        isMultiSelectionEnabled = true
-        dialogTitle = if (add) "Add log files to the view" else "Open a log file or folder"
-    }
-    if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return
-    val chosen: List<File> = chooser.selectedFiles.toList().ifEmpty { listOfNotNull(chooser.selectedFile) }
-    if (chosen.isEmpty()) return
-    if (add) state.add(chosen) else state.open(chosen)
-}
-
-/**
- * The window icon, decoded straight off the classpath.
- *
- * Not `painterResource`: it is deprecated in favour of the Compose resources library, which means a
- * generated accessor class and another dependency — a lot of machinery for one PNG. Skia is already
- * here as part of Compose Desktop and decodes it in a line.
- */
 private fun loadWindowIcon(): Painter {
     val bytes: ByteArray = requireNotNull(object {}.javaClass.getResourceAsStream("/icon.png")) {
         "icon.png is not on the classpath — processResources should copy it from desktop/"
@@ -405,25 +198,3 @@ private fun loadWindowIcon(): Painter {
 }
 
 /** Suggests a name from what is open, so an export lands somewhere recognisable. */
-internal fun chooseExportTarget(source: LogSource): File? {
-    runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
-    val suggested: String = if (source.files.size == 1) {
-        "${source.files.first().name}-filtered.txt"
-    } else {
-        "loupe-export.txt"
-    }
-    val chooser = JFileChooser().apply {
-        dialogTitle = "Export the current filter"
-        selectedFile = File(suggested)
-    }
-    if (chooser.showSaveDialog(null) != JFileChooser.APPROVE_OPTION) return null
-    return chooser.selectedFile
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Suppress("UNCHECKED_CAST")
-private fun filesFrom(event: DragAndDropEvent): List<File>? = runCatching {
-    val transferable = event.awtTransferable
-    if (!transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) return null
-    (transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
-}.getOrNull()
