@@ -26,9 +26,15 @@ workflow:
 # plain Kotlin, so Linux is enough. Only jpackage needs macOS.
 build:
   stage: build
-  image: eclipse-temurin:17-jdk
+  # -jammy, not the floating `17-jdk`: that tag follows the base distribution and will step to a
+  # new Ubuntu under you, taking glibc with it — which is what Skiko's Linux native links against.
+  # The JDK patch level floating is fine and desirable; the distro moving is not.
+  #
+  # If this instance pulls from Docker Hub anonymously, mirror the image into the GitLab container
+  # registry: the rate limit is per IP, and every runner behind the same NAT shares it.
+  image: eclipse-temurin:17-jdk-jammy
   tags:
-    - docker
+    - docker-only
   variables:
     # Inside the project directory, because GitLab can only cache paths it can see from there.
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
@@ -69,7 +75,7 @@ build:
 # even a Homebrew JDK on the runner produces a correct bundle.
 .macos:
   tags:
-    - macos
+    - no-docker
   timeout: 45m
 
 package:dmg:
@@ -81,26 +87,9 @@ package:dmg:
     - ./gradlew build
     # Signs and notarises if this machine has a Developer ID identity in ~/.gradle/gradle.properties,
     # builds unsigned otherwise. See docs/packaging.md.
-    - ./tools/package-dmg.sh "${CI_COMMIT_TAG#v}"
-  artifacts:
-    expire_in: 30 days
-    paths:
-      - build/release/
-
-# ── Release ───────────────────────────────────────────────────────────────────────────────────
-release:
-  stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  tags:
-    - docker
-  needs:
-    - job: package:dmg
-      artifacts: true
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v/
-  script:
-    # A GitLab release links to assets, it does not host them, so the files go to the project's
-    # generic package registry first.
+    - DMG=$(./tools/package-dmg.sh "${CI_COMMIT_TAG#v}")
+    # The upload happens here, not in the release job: that one runs the release-cli image, which is
+    # Alpine-based and ships no curl. macOS has curl built in.
     - |
       set -e
       for file in build/release/*; do
@@ -111,6 +100,40 @@ release:
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/loupe/${CI_COMMIT_TAG#v}/${name}"
         echo "uploaded $name"
       done
+    # Handed to the release job as variables. The `release:` block expands `$VAR` but *not* shell
+    # parameter expansion, so `${CI_COMMIT_TAG#v}` there would be taken literally and the asset link
+    # would point at a version that was never uploaded.
+    - |
+      {
+        echo "PKG_VERSION=${CI_COMMIT_TAG#v}"
+        echo "DMG_NAME=$(basename "$DMG")"
+      } > build/release/release.env
+  artifacts:
+    expire_in: 30 days
+    reports:
+      dotenv: build/release/release.env
+    paths:
+      - build/release/
+
+# ── Release ───────────────────────────────────────────────────────────────────────────────────
+release:
+  stage: release
+  # This image exists to provide release-cli and nothing else — it is Alpine with one binary, no
+  # curl, no bash. Anything that needs a tool belongs in package:dmg.
+  #
+  # Pin this to a version your instance supports rather than tracking `latest`, and mirror it into
+  # your own registry if the runners cannot reach registry.gitlab.com.
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - docker-only
+  needs:
+    # artifacts: true is what carries release.env's variables across, not just the files.
+    - job: package:dmg
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v/
+  script:
+    - echo "Releasing $CI_COMMIT_TAG with $DMG_NAME"
   release:
     tag_name: "$CI_COMMIT_TAG"
     name: "Loupe $CI_COMMIT_TAG"
@@ -124,6 +147,8 @@ release:
       Verify the download against the `.sha256` beside it.
     assets:
       links:
-        - name: "Loupe.dmg (arm64)"
-          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/loupe/${CI_COMMIT_TAG}/"
+        # $DMG_NAME and $PKG_VERSION come from package:dmg's dotenv report. Plain variables, because
+        # this block does no shell expansion.
+        - name: "$DMG_NAME"
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/loupe/$PKG_VERSION/$DMG_NAME"
           link_type: package

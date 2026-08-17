@@ -187,6 +187,33 @@ Two GitLab specifics worth knowing:
 - **A release links to assets, it does not host them**, so the `.dmg`s go to the project's generic
   package registry first and the release entry points at them.
 
+### The images, and why they are what they are
+
+**`eclipse-temurin:17-jdk-jammy` for the build.** Not the floating `17-jdk`: that tag follows the
+base distribution and will step to a new Ubuntu under you, taking glibc with it — which is what
+Skiko's Linux native links against. The JDK patch level floating is fine and wanted; the distro
+moving underneath is not. If your runners pull from Docker Hub anonymously, **mirror this into your
+own container registry**: the rate limit is per IP, and every runner behind the same NAT shares it.
+
+**`release-cli` for the release, and nothing else runs there.** That image is Alpine with one binary
+in it — **no `curl`**, no bash. So the upload to the package registry happens in `package:dmg`, on
+the Mac, where curl is part of the system. Anything needing a tool belongs in that job, not this one.
+Pin the tag to a version your instance supports rather than tracking `latest`, and mirror it too if
+the runners cannot reach `registry.gitlab.com`.
+
+**The Mac job has no `image:` at all** — a shell executor ignores it. That is the tell that it runs
+on the machine itself.
+
+### Two things that bite in the `release:` block
+
+It expands `$VAR`, but it is **not a shell**: `${CI_COMMIT_TAG#v}` there is taken literally, so the
+asset link would point at `…/loupe/v0.1.0/` while the upload went to `…/loupe/0.1.0/`. A dead link,
+discovered on release day. So `package:dmg` computes `PKG_VERSION` and `DMG_NAME` and hands them
+over as a **dotenv report**; the release block uses plain `$PKG_VERSION` and `$DMG_NAME`.
+
+For those variables to cross, `needs` must carry `artifacts: true` — it is what transports the
+dotenv report, not just the files.
+
 ### Intel
 
 Both CI configs build for the machine they run on. If you need an x64 `.dmg`, add a second Mac
@@ -195,5 +222,6 @@ Intel machine and attach the result. Saying which architecture a build is for in
 matters either way; an arm64 build does not launch on Intel.
 
 > **Tested:** the packaging script, on this machine, producing a correctly named 63 MB `.dmg` with
-> its checksum. **Reviewed, not executed:** everything in `.gitlab-ci.yml` past the build job, and
-> the whole signing path — neither has a GitLab project or a certificate to run against.
+> its checksum, and that all three CI files parse. **Reviewed, not executed:** everything in
+> `.gitlab-ci.yml` past the build job, and the whole signing path — neither has a GitLab project or
+> a certificate to run against.
