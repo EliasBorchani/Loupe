@@ -66,6 +66,22 @@ compose.desktop {
                 // Two drawings in one .icns: the detailed one from 64px up, a simplified one at 16
                 // and 32 where it would otherwise collapse. Regenerate with tools/render-icon.sh.
                 iconFile.set(project.file("icon.icns"))
+
+                // Off unless the machine building has the credentials, so an ordinary build and a
+                // hosted runner both produce an unsigned .dmg exactly as before. A self-hosted Mac
+                // with the Developer ID certificate in its login keychain gets a signed, notarised
+                // one from the same command — which is the whole reason this is worth wiring.
+                //
+                // Values go in that machine's ~/.gradle/gradle.properties. Never in the repo.
+                signing {
+                    sign.set(providers.gradleProperty("loupe.signing.identity").isPresent)
+                    identity.set(providers.gradleProperty("loupe.signing.identity"))
+                }
+                notarization {
+                    appleID.set(providers.gradleProperty("loupe.notarization.appleId"))
+                    password.set(providers.gradleProperty("loupe.notarization.password"))
+                    teamID.set(providers.gradleProperty("loupe.notarization.teamId"))
+                }
             }
         }
     }

@@ -62,13 +62,23 @@ is the floor for the stack, and it was worth measuring rather than assuming.
 
 ---
 
-## Signing and notarisation — the part that needs your Apple account
+## Signing and notarisation
 
-Without it, macOS refuses the app on first launch. The user's way round is right-click → **Open**
-→ **Open**, once, or `xattr -d com.apple.quarantine /Applications/Loupe.app`. The release notes say
-so; that is honest but it is friction, and most people will not get past it.
+Without it, macOS refuses the app on first launch. The way round is right-click → **Open** →
+**Open**, once, or `xattr -d com.apple.quarantine /Applications/Loupe.app`. That is honest, but it
+is friction, and most people will not get past it.
 
-**None of the following has been run** — it needs a certificate that only you can obtain, so treat
+**A self-hosted Mac runner makes this easy**, and that is worth saying plainly: the hard part of
+notarising in CI is normally getting a certificate into a hosted runner — base64 a `.p12` into a
+secret, import it into a temporary keychain, unlock it, tear it down. On your own Mac none of that
+exists. The certificate lives in the login keychain once, the credentials live in that machine's
+`~/.gradle/gradle.properties`, and **no secret ever touches the repository or GitLab**.
+
+The build is already wired for it: `signing.sign` is on only when `loupe.signing.identity` is
+present, so every other machine keeps producing an unsigned `.dmg` exactly as before, and
+`tools/package-dmg.sh` runs `notarizeDmg` instead of `packageDmg` when it sees that property.
+
+**None of the following has been run here** — it needs a certificate only you can obtain — so treat
 it as a checklist rather than as tested configuration.
 
 ### 1. Get the certificate
@@ -85,23 +95,10 @@ security find-identity -v -p codesigning
 Then an **app-specific password** from [appleid.apple.com](https://appleid.apple.com) → Sign-In and
 Security → App-Specific Passwords. Not your Apple ID password.
 
-### 2. Turn it on in the build
+### 2. Put the credentials on the machine
 
-In `desktop/build.gradle.kts`, inside `nativeDistributions { macOS { … } }`:
-
-```kotlin
-signing {
-    sign.set(true)
-    identity.set(providers.gradleProperty("loupe.signing.identity"))
-}
-notarization {
-    appleID.set(providers.gradleProperty("loupe.notarization.appleId"))
-    password.set(providers.gradleProperty("loupe.notarization.password"))
-    teamID.set(providers.gradleProperty("loupe.notarization.teamId"))
-}
-```
-
-Put the values in `~/.gradle/gradle.properties`, **never** in the repo:
+Nothing to change in the build — it already reads these. On the Mac mini runner, as the user the
+runner runs as, in `~/.gradle/gradle.properties`. **Never** in the repo:
 
 ```properties
 loupe.signing.identity=Your Name (TEAMID)
@@ -110,19 +107,29 @@ loupe.notarization.password=abcd-efgh-ijkl-mnop
 loupe.notarization.teamId=TEAMID
 ```
 
-Then `./gradlew :desktop:notarizeDmg`. Apple's service takes a few minutes and answers with a log
-URL when it refuses; the usual first refusal is an unsigned nested binary — for us that would be
-`libskiko-macos-*.dylib`, which the plugin should sign along with everything else.
+Then `./tools/package-dmg.sh 0.1.0` on that machine notarises instead of just packaging. Apple's
+service takes a few minutes and answers with a log URL when it refuses; the usual first refusal is
+an unsigned nested binary — for us that would be `libskiko-macos-*.dylib`, which the plugin signs
+along with everything else.
 
-### 3. In CI
+### 3. The one thing that bites on a runner
 
-Add `MACOS_CERTIFICATE` (base64 of a `.p12`), `MACOS_CERTIFICATE_PWD`, `NOTARIZATION_APPLE_ID`,
-`NOTARIZATION_PASSWORD` and `NOTARIZATION_TEAM_ID` as repository secrets, import the certificate
-into a temporary keychain before the packaging step, and swap `packageDmg` for `notarizeDmg`.
+If the GitLab runner is installed as a **launchd daemon** rather than an agent, it has no login
+session, and the login keychain stays locked — signing fails with a keychain error that does not say
+so. Two fixes, in order of preference:
 
-The keychain dance is fiddly and I have not been able to test any of it, so
-`.github/workflows/release.yml` deliberately builds **unsigned** rather than shipping a plausible
-guess that fails on the day you actually cut a release.
+- Install the runner as a **launchd agent** in the runner user's session (`gitlab-runner install`
+  without `--user root`), and log that user in once. The keychain then unlocks with the session.
+- Or unlock it in the job, which means a keychain password in a masked CI variable:
+  `security unlock-keychain -p "$KEYCHAIN_PWD" ~/Library/Keychains/login.keychain-db`.
+
+The first keeps every secret off GitLab, which was the point.
+
+### GitHub Actions stays unsigned
+
+`.github/workflows/release.yml` deliberately builds unsigned. The hosted-runner keychain dance is
+exactly what your own Macs let you skip, and shipping an untested version of it would only fail on
+the day you cut a release.
 
 ### The alternative worth considering
 
@@ -149,29 +156,44 @@ release day.
 writes the Gatekeeper instructions into the notes. `workflow_dispatch` does the same on demand for a
 tag that already exists.
 
-### GitLab CI
+### GitLab CI, self-hosted
 
-`.gitlab-ci.yml` mirrors it, with three differences that are GitLab's rather than ours:
+`.gitlab-ci.yml` is written for Docker runners plus a Mac mini shell runner. **Set the `docker` and
+`macos` tags to whatever yours advertise** — they are placeholders.
 
-- **Test results land in the merge request.** `artifacts:reports:junit` renders failures in the MR
-  itself instead of in a log nobody opens — the one thing GitLab does better here out of the box.
-- **A release links to assets, it does not host them.** The `.dmg`s are uploaded to the project's
-  generic package registry first, and the release entry links to them.
-- **The packaging job needs a macOS runner**, and on GitLab.com that is a paid tier. On the free
-  tier the job simply stays pending. Point the `.macos` tag at whatever your runner advertises —
-  `saas-macos-medium-m1` on GitLab.com, or your own tag for a self-hosted Mac.
+**Build and test go on Docker, packaging on the Mac.** The build job runs on every push and merge
+request, and the Macs are the scarce resource: they should be free for the thing that genuinely
+needs them. Nothing in the test suite opens a window, so Linux is enough — proven by the GitHub
+`ubuntu-latest` run getting through the whole suite.
 
-**If you have no macOS runner**, the fallback is honest and takes a minute:
+A shell executor is not a container, and three things follow:
 
-```bash
-git checkout v0.1.0
-./gradlew build && ./tools/package-dmg.sh 0.1.0
-# → build/release/Loupe-0.1.0-arm64.dmg (+ .sha256)
-```
+- **No `GRADLE_USER_HOME` override on the Mac job.** The runner's own `~/.gradle` persists between
+  builds, which beats GitLab's cache — that one zips and unzips. It is also where the signing
+  credentials live.
+- **The working directory survives**, so `tools/package-dmg.sh` empties `build/release` before
+  writing. Otherwise the previous tag's `.dmg` is still there when the release job globs the folder.
+  This one is a real bug on a shell runner and would not show up on Docker at all.
+- **The Gradle daemon survives**, and that is a feature. No `--no-daemon`.
 
-then upload it by hand to the release. That is one architecture only — an arm64 build will not
-launch on an Intel Mac — so either borrow an Intel machine or say in the notes which one it is.
+The Mac needs only *a* JDK 17+ on `PATH` for Gradle to start. Which one does not matter: the
+toolchain and the foojay resolver provision an Adoptium 17 for compiling and for jpackage, so even
+a Homebrew JDK on the runner yields a correct bundle.
 
-> The Linux build job is proven: the GitHub `ubuntu-latest` run gets all the way through the test
-> suite. The GitLab **release** job's syntax has never been executed, because there is no GitLab
-> project to run it against — treat that one as reviewed, not tested.
+Two GitLab specifics worth knowing:
+
+- **Test results land in the merge request** via `artifacts:reports:junit`, rather than in a log
+  nobody opens. The one thing GitLab does better here out of the box.
+- **A release links to assets, it does not host them**, so the `.dmg`s go to the project's generic
+  package registry first and the release entry points at them.
+
+### Intel
+
+Both CI configs build for the machine they run on. If you need an x64 `.dmg`, add a second Mac
+runner with a distinguishing tag and a second `package:dmg` job — or run the script by hand on an
+Intel machine and attach the result. Saying which architecture a build is for in the release notes
+matters either way; an arm64 build does not launch on Intel.
+
+> **Tested:** the packaging script, on this machine, producing a correctly named 63 MB `.dmg` with
+> its checksum. **Reviewed, not executed:** everything in `.gitlab-ci.yml` past the build job, and
+> the whole signing path — neither has a GitLab project or a certificate to run against.

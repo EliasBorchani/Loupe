@@ -1,22 +1,34 @@
-# GitLab CI, doing the same work as .github/workflows/. The packaging steps live in
-# tools/package-dmg.sh so the two cannot drift — the CI file nobody watches is the one that breaks
-# on release day.
+# GitLab CI for a self-hosted instance: Docker runners for build and test, a Mac mini shell runner
+# for packaging. The packaging steps live in tools/package-dmg.sh, which the GitHub workflow calls
+# too — two CI files that each spell out the packaging drift, and the one nobody watches is the one
+# that breaks on release day.
+#
+# Runner tags below are placeholders. Set them to whatever yours advertise.
 
 stages:
   - build
   - package
   - release
 
-# One pipeline per change, not two. Without this, pushing a branch that has an open merge request
-# runs both a branch pipeline and a merge-request pipeline.
+# One pipeline per change. Without this, pushing a branch that has an open merge request runs both a
+# branch pipeline and a merge-request pipeline.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-.linux:
+# ── Build and test: Docker ────────────────────────────────────────────────────────────────────
+#
+# On Docker rather than the Mac minis, deliberately. This job runs on every push and merge request,
+# and the Macs are the scarce resource — they should be free for the thing that genuinely needs
+# them. Nothing here opens a window: the state holder is tested without Compose and the parsers are
+# plain Kotlin, so Linux is enough. Only jpackage needs macOS.
+build:
+  stage: build
   image: eclipse-temurin:17-jdk
+  tags:
+    - docker
   variables:
     # Inside the project directory, because GitLab can only cache paths it can see from there.
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
@@ -27,18 +39,12 @@ workflow:
       - .gradle/wrapper
   before_script:
     - chmod +x gradlew
-
-build:
-  extends: .linux
-  stage: build
-  # Linux, because nothing here opens a window: the state holder is tested without Compose and the
-  # parsers are plain Kotlin. Only packaging needs a Mac.
   script:
     - ./gradlew build --stacktrace
   artifacts:
     when: always
     expire_in: 1 week
-    # Surfaces failures in the merge request itself rather than in a log nobody opens.
+    # Renders failures in the merge request itself rather than in a log nobody opens.
     reports:
       junit:
         - core/build/test-results/test/TEST-*.xml
@@ -46,15 +52,24 @@ build:
     paths:
       - "*/build/reports/tests"
 
-# Needs a macOS runner: jpackage cannot produce a .dmg anywhere else. On GitLab.com that means SaaS
-# macOS runners, which are a paid tier — on the free tier this job simply stays pending, and the
-# honest fallback is `tools/package-dmg.sh` on your own Mac (see docs/packaging.md).
+# ── Packaging: the Mac mini, shell executor ───────────────────────────────────────────────────
 #
-# Swap the tag below for whatever your runner advertises: `saas-macos-medium-m1` on GitLab.com, or
-# your own tag for a self-hosted Mac.
+# A shell executor is not an isolated container, and three things follow from that:
+#
+#   - **No `image:`, and no GRADLE_USER_HOME override.** The runner's own ~/.gradle persists between
+#     builds, which is faster than GitLab's cache could ever be — it zips and unzips. It is also
+#     where the signing credentials live, if this machine has them.
+#   - **The working directory survives**, so tools/package-dmg.sh empties build/release before
+#     writing. Otherwise the previous tag's .dmg is still sitting there when the release job globs
+#     the folder.
+#   - **The Gradle daemon survives too**, and that is a feature here. No --no-daemon.
+#
+# The Mac only needs *a* JDK 17+ on PATH for Gradle itself to start. Which one does not matter:
+# jvmToolchain and the foojay resolver provision an Adoptium 17 for compiling and for jpackage, so
+# even a Homebrew JDK on the runner produces a correct bundle.
 .macos:
   tags:
-    - saas-macos-medium-m1
+    - macos
   timeout: 45m
 
 package:dmg:
@@ -64,26 +79,30 @@ package:dmg:
     - if: $CI_COMMIT_TAG =~ /^v/
   script:
     - ./gradlew build
+    # Signs and notarises if this machine has a Developer ID identity in ~/.gradle/gradle.properties,
+    # builds unsigned otherwise. See docs/packaging.md.
     - ./tools/package-dmg.sh "${CI_COMMIT_TAG#v}"
   artifacts:
     expire_in: 30 days
     paths:
       - build/release/
 
+# ── Release ───────────────────────────────────────────────────────────────────────────────────
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - docker
   needs:
     - job: package:dmg
       artifacts: true
   rules:
     - if: $CI_COMMIT_TAG =~ /^v/
-  variables:
-    VERSION: "${CI_COMMIT_TAG}"
   script:
     # A GitLab release links to assets, it does not host them, so the files go to the project's
     # generic package registry first.
     - |
+      set -e
       for file in build/release/*; do
         name=$(basename "$file")
         curl --fail --silent --show-error \
@@ -92,28 +111,19 @@ release:
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/loupe/${CI_COMMIT_TAG#v}/${name}"
         echo "uploaded $name"
       done
-    - |
-      cat > assets.json <<JSON
-      [$(for file in build/release/*.dmg; do
-            name=$(basename "$file")
-            printf '{"name":"%s","url":"%s/packages/generic/loupe/%s/%s","link_type":"package"},' \
-              "$name" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}" "${CI_COMMIT_TAG#v}" "$name"
-         done | sed 's/,$//')]
-      JSON
-    - cat assets.json
   release:
     tag_name: "$CI_COMMIT_TAG"
     name: "Loupe $CI_COMMIT_TAG"
     description: |
-      `arm64` for Apple Silicon, `x64` for Intel. There is no universal build: Skiko ships one
-      native library per architecture.
+      Built on Apple Silicon. An Intel Mac needs its own build: Skiko ships one native library per
+      architecture and there is no universal binary.
 
-      **Not notarised.** macOS will refuse to open it on the first try. Right-click the app →
-      **Open** → **Open**, once. Or `xattr -d com.apple.quarantine /Applications/Loupe.app`.
+      If the build is not notarised, macOS refuses it on the first try — right-click the app →
+      **Open** → **Open**, once, or `xattr -d com.apple.quarantine /Applications/Loupe.app`.
 
       Verify the download against the `.sha256` beside it.
     assets:
       links:
-        - name: "Loupe.dmg"
+        - name: "Loupe.dmg (arm64)"
           url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/loupe/${CI_COMMIT_TAG}/"
           link_type: package

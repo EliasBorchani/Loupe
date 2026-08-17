@@ -20,11 +20,27 @@ ARCH="${2:-$(uname -m)}"
 # uname reports arm64; the world calls the other one x64, not x86_64.
 [ "$ARCH" = "x86_64" ] && ARCH="x64"
 
-./gradlew :desktop:packageDmg
+# notarizeDmg when this machine holds a signing identity, packageDmg otherwise. Same script either
+# way, so a self-hosted Mac runner with the certificate installed produces a signed build without
+# the pipeline knowing anything about it, and every other machine keeps producing an unsigned one.
+#
+# Reading the properties file rather than asking Gradle: `gradlew properties` costs a full
+# configuration to answer a question a grep answers. Set LOUPE_SIGN=1 to force it either way.
+GRADLE_PROPERTIES="${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+if [ "${LOUPE_SIGN:-}" = "1" ] || grep -qs '^loupe\.signing\.identity=' "$GRADLE_PROPERTIES"; then
+  echo "package-dmg.sh: signing identity configured — notarising" >&2
+  ./gradlew :desktop:notarizeDmg
+else
+  echo "package-dmg.sh: no signing identity — building unsigned" >&2
+  ./gradlew :desktop:packageDmg
+fi
 
 SRC=$(find desktop/build/compose/binaries/main/dmg -name '*.dmg' | head -1)
 [ -n "$SRC" ] || { echo "package-dmg.sh: no .dmg was produced" >&2; exit 1; }
 
+# Emptied, not just created. A shell-executor runner keeps the working directory between builds, so
+# last release's .dmg would still be sitting here and the release job globs the whole folder.
+rm -rf build/release
 mkdir -p build/release
 DEST="build/release/Loupe-${VERSION}-${ARCH}.dmg"
 mv "$SRC" "$DEST"

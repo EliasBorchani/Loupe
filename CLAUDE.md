@@ -74,8 +74,14 @@ the KDoc at the site; this is the index.
 - **One `.dmg` per architecture.** Skiko ships one native library per arch and there is no universal
   binary, so an arm64 build will not launch on an Intel Mac.
 - **Both CI systems call `tools/package-dmg.sh`.** GitHub Actions and GitLab CI each have a config,
-  and the packaging steps live in one script so they cannot drift. GitLab's release job has been
-  reviewed, never executed — there is no GitLab project behind it.
+  and the packaging steps live in one script so they cannot drift.
+- **GitLab is self-hosted: Docker runners for build, a Mac mini shell runner for packaging.** A
+  shell executor keeps its working directory between builds, which is why the script empties
+  `build/release` — otherwise the previous tag's `.dmg` is still there when the release job globs
+  the folder. It keeps `~/.gradle` too, which is both the cache and where signing credentials live.
+- **Signing is off unless `loupe.signing.identity` is set** in that machine's
+  `~/.gradle/gradle.properties`. A self-hosted Mac is the one place notarising is easy — no secret
+  ever reaches the repository. Reviewed, never executed; there is no certificate here.
 - **63 MB is the floor**, measured: ~30 MB Skia, ~35 MB AWT runtime, the rest Compose and Kotlin.
   jlink already keeps only seven modules. Do not go looking for something to trim.
 
