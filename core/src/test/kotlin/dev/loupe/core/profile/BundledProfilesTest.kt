@@ -39,7 +39,7 @@ class BundledProfilesTest {
         // Given / When — loading the registry compiles them all, and throws on any problem.
         // Then
         assertEquals(
-            listOf("android-logcat", "generic-timestamped", "syslog-rfc3164", "withings-healthmate"),
+            listOf("android-logcat", "android-studio-logcat", "generic-timestamped", "syslog-rfc3164", "withings-healthmate"),
             REGISTRY.profiles.map { candidate -> candidate.name }.sorted(),
         )
     }
@@ -50,6 +50,7 @@ class BundledProfilesTest {
         // property worth pinning rather than discovering on a 1 GiB file.
         assertTrue(profile("withings-healthmate").timestampFormat.isFastPath)
         assertTrue(profile("android-logcat").timestampFormat.isFastPath)
+        assertTrue(profile("android-studio-logcat").timestampFormat.isFastPath)
         assertTrue(profile("generic-timestamped").timestampFormat.isFastPath)
         // A named month and a space-padded day cannot be read at a fixed offset.
         assertFalse(profile("syslog-rfc3164").timestampFormat.isFastPath)

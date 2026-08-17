@@ -152,11 +152,28 @@ The bundled profiles are heavily commented and cover the awkward cases between t
 | [`syslog-rfc3164.logprofile.toml`](../profiles/syslog-rfc3164.logprofile.toml) | A named month, a space-padded day, and no level field |
 | [`generic-timestamped.logprofile.toml`](../profiles/generic-timestamped.logprofile.toml) | Optional milliseconds, optional level, catch-all |
 
+## When the file is not lines at all
+
+A profile describes **lines**. Some log files are not lines: an Android Studio `.logcat` export,
+despite the extension, is one JSON document where a single entry spans sixteen pretty-printed
+lines. No regex can describe that, and one that appeared to would be silently wrong.
+
+Those go through a **source adapter** instead (`core/source/SourceAdapter.kt`), which renders the
+container into plain text before anything is indexed, and a profile reads the result. The rendered
+copy takes the original's name in a temporary directory that is deleted when the file is closed, so
+the `file` facet still reads right and reopening still points at the real file.
+
+One ships today: `AndroidStudioLogcatAdapter`, paired with the `android-studio-logcat` profile.
+Adding another is a deliberate act — an adapter claims that a whole file format is worth
+supporting, which is a bigger promise than a profile makes.
+
+It is also the pattern for `.gz` and `.zip`, which are containers in exactly the same sense.
+
 ## What a profile cannot do yet
 
-**JSON.** A regex only works for one key order and is silently wrong for every other, before you
-get to nested objects and escaped quotes. JSON needs a field extractor, and shipping a profile that
-lies about most files to read one would be worse than admitting the gap.
+**JSON, as a profile.** A regex only works for one key order and is silently wrong for every other,
+before you get to nested objects and escaped quotes. JSON needs a field extractor. A specific,
+known JSON shape can be handled by an adapter, as `.logcat` is; the general case still cannot.
 
 **A field that is not on the entry's first line.** Everything parsed comes from the opening line;
 continuation lines are text, not structure.

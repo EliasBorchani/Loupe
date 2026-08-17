@@ -25,6 +25,13 @@ the code, README and profiles are English.
 `generateProfileIndex` writes `/profiles/index.txt` so `ProfileRegistry.bundled()` can enumerate
 them from inside a jar. It is generated, never hand-edited.
 
+**A profile describes lines; a container does not have any.** An Android Studio `.logcat` export is
+one JSON document holding every message, so no regex can ever read it. Those go through a
+`SourceAdapter` (`core/source/`), which renders the container into text *before* detection and
+indexing — the temporary copy takes the original's name and is deleted on `LogSource.close()`,
+while `LogSource.files` keeps the paths the user chose so reopening still works. Same pattern for
+`.gz`/`.zip` when they land. Adding an adapter is a deliberate act: it claims a whole file format.
+
 Packages are the responsibility buckets below — don't invent a new one without a reason:
 
 ```

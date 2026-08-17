@@ -350,6 +350,7 @@ private fun Opening(status: OpenStatus.Working) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             BasicText(
                 text = when (status.phase) {
+                    OpenPhase.Converting -> "converting to text…"
                     OpenPhase.Detecting -> "recognising the format…"
                     OpenPhase.Indexing -> "indexing…"
                     OpenPhase.Merging -> "merging files…"

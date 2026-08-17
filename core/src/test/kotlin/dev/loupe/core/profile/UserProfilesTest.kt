@@ -16,6 +16,13 @@ import java.io.File
 class UserProfilesTest {
 
     companion object {
+        /**
+         * Derived, not written down. These tests are about what a *user* directory adds; a literal
+         * count here would fail every time a profile ships, which says nothing about user profiles.
+         * The bundled set has its own guard in `BundledProfilesTest`.
+         */
+        private val BUNDLED_COUNT: Int = ProfileRegistry.bundled().profiles.size
+
         private val WIDGET_LOG = """
             name        = "widget"
             description = "A format nobody has described before"
@@ -149,7 +156,7 @@ class UserProfilesTest {
         val loaded: LoadedRegistry = ProfileRegistry.bundledPlusUser(File(logs, "nothing-here"))
 
         // Then
-        assertEquals(4, loaded.registry.profiles.size)
+        assertEquals(BUNDLED_COUNT, loaded.registry.profiles.size)
         assertEquals(emptyList<String>(), loaded.problems)
     }
 
@@ -163,7 +170,7 @@ class UserProfilesTest {
         val loaded: LoadedRegistry = ProfileRegistry.bundledPlusUser(profiles)
 
         // Then
-        assertEquals(5, loaded.registry.profiles.size)
+        assertEquals(BUNDLED_COUNT + 1, loaded.registry.profiles.size)
         assertEquals(emptyList<String>(), loaded.problems)
     }
 }

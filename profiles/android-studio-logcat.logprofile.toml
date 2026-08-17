@@ -1,0 +1,71 @@
+#  Android Studio `.logcat` export, after conversion.
+#
+#  The exported file is a single JSON document, not text — AndroidStudioLogcatAdapter renders it
+#  into the lines below before anything here is applied. This profile therefore describes a format
+#  Loupe writes itself, which is why it can afford to be unambiguous where real logcat is not:
+#  logcat's own `tag: ` separator breaks on the tags Android actually emits
+#  (`ASvc::AudioMetricDataReader`), so both tag and process are bracketed.
+#
+#      2026-08-17 13:11:46.123  1971  2033 D [WindowManager] [system_server] partially applying…
+#                              a stack trace's own lines are indented to the timestamp width, so
+#                              one message stays one entry
+
+name        = "android-studio-logcat"
+description = "Android Studio .logcat export (JSON), converted to text"
+# Above android-logcat: both could plausibly score on a converted file, and this one is exact.
+priority    = 45
+
+[detect]
+sample    = 200
+min_match = 0.80
+
+[entry]
+opens = '''^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} '''
+# 23 spaces — the timestamp's width. Unlike raw logcat, where a wrapped line repeats the whole
+# prefix and each frame becomes its own entry, the export keeps a multi-line message whole. Folding
+# it back means a stack trace filters, copies and exports as the single thing it is.
+continues = '''^ {23}'''
+strip_continuation_indent = true
+
+[parse]
+# The tag is lazy and anchored on `] [`; the process, which closes the prefix, cannot contain a
+# bracket because an application id is a package name. That ordering is what lets a tag holding a
+# bracket — `DisplayPowerController[0]` — stay one facet value without an escape nothing would undo.
+regex = '''^(?<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?<pid>\d+)\s+(?<tid>\d+) (?<level>[VDIWEFA]) \[(?<tag>.*?)\] \[(?<process>[^\]]*)\] (?<message>.*)$'''
+
+[fields.ts]
+role = "timestamp"
+# The export carries epoch seconds, so unlike raw logcat there is a real year to write down and no
+# year has to be assumed.
+format = "yyyy-MM-dd HH:mm:ss.SSS"
+zone   = "local"
+
+[fields.level]
+role  = "level"
+order = ["V", "D", "I", "W", "E", "F", "A"]
+labels = { V = "Verbose", D = "Debug", I = "Info", W = "Warn", E = "Error", F = "Fatal", A = "Assert" }
+
+[fields.process]
+role  = "facet"
+label = "Process"
+facet = "auto"
+
+[fields.tag]
+role  = "facet"
+label = "Tag"
+facet = "auto"
+
+[fields.pid]
+role  = "facet"
+label = "PID"
+facet = "auto"
+
+[fields.tid]
+role  = "facet"
+label = "TID"
+# Same call as android-logcat: parsed so it can be searched, kept out of the sidebar because
+# nobody filters a log by thread id.
+facet = "never"
+
+[fields.message]
+role = "message"
