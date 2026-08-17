@@ -1,6 +1,5 @@
 package dev.loupe.spike
 
-import dev.loupe.core.index.EntryFilter
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
 import dev.loupe.core.io.TextSources
@@ -12,6 +11,8 @@ import dev.loupe.core.profile.ProfileMatch
 import dev.loupe.core.profile.ProfileRegistry
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
+import dev.loupe.core.source.LogSource
+import dev.loupe.core.source.LogSourceLoader
 import java.io.File
 import java.util.Locale
 
@@ -61,6 +62,65 @@ fun main(args: Array<String>) {
     val reference: LogIndex = results.first().index
     printCorpusShape(reference)
     TextSources.of(fixture).use { text -> printQueryReport(reference, text) }
+    printMergeReport(fixtureBytes)
+}
+
+/**
+ * The path the app actually takes, which this harness did not measure until now.
+ *
+ * Everything above indexes **one** file with a parser handed to it. `LogSourceLoader.open` scores
+ * every bundled profile against the largest file, indexes each file separately and k-way merges them
+ * — so the published budget described strictly less than the tool does. A folder is also where the
+ * merge's dictionary remapping happens, which is the part with no single-file equivalent.
+ */
+private fun printMergeReport(totalBytes: Long) {
+    val folder: File = prepareFolderFixture(totalBytes)
+    println()
+    println("MERGED FOLDER — ${folder.listFiles().orEmpty().size} files, ${"%.2f".format(Locale.ROOT, folder.listFiles().orEmpty().sumOf { file -> file.length() } / BYTES_PER_MIB)} MiB total")
+
+    var best: LogSource? = null
+    repeat(RUNS_PER_STRATEGY) { run ->
+        val startNanos: Long = System.nanoTime()
+        val source: LogSource = LogSourceLoader.open(listOf(folder))
+        val elapsedNanos: Long = System.nanoTime() - startNanos
+        println(
+            "  run ${run + 1}  %6.2fs  %5.0f ns/entry  %d entries  profile %s".format(
+                Locale.ROOT,
+                elapsedNanos / 1e9,
+                elapsedNanos.toDouble() / source.index.entryCount,
+                source.index.entryCount,
+                source.profile.name,
+            ),
+        )
+        best?.close()
+        best = source
+    }
+    best?.use { source ->
+        val ascending: Boolean = (1 until source.index.entryCount)
+            .all { entry -> source.index.timestamps[entry - 1] <= source.index.timestamps[entry] }
+        println("  merged stream ascending: $ascending · file facet: ${source.index.fileFacetIndex != LogIndex.NO_FACET}")
+    }
+}
+
+/** Day files that overlap at midnight, which is the case the merge exists for. */
+private fun prepareFolderFixture(totalBytes: Long): File {
+    val perFile: Long = totalBytes / 3
+    val folder = File("spike/fixtures/${totalBytes / (1L shl 20)}MiB-folder")
+    val days: List<File> = listOf("2026-06-02", "2026-06-03", "2026-06-04").map { name -> File(folder, name) }
+    if (days.all { file -> file.exists() && file.length() >= perFile * 0.98 }) {
+        println()
+        println("Folder fixture already present, reusing it.")
+        return folder
+    }
+    folder.mkdirs()
+    println()
+    println("Generating a 3-day folder fixture in ${folder.path} …")
+    days.forEachIndexed { day, file ->
+        // A different seed per day, so the facet dictionaries genuinely differ and the merge has
+        // something to remap rather than three identical files to concatenate.
+        LogFileGenerator.generate(file, perFile, seed = 20260814L + day)
+    }
+    return folder
 }
 
 private fun detectProfile(fixture: File): CompiledProfile {
