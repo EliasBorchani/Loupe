@@ -198,6 +198,34 @@ class LoupeStateTest {
     }
 
     @Test
+    fun `a facet opens past its top-N and folds back`() = runBlocking {
+        // Given — the sidebar's "+ n more" said how many values were hidden and gave no way in.
+        openFolder()
+        assertFalse("tag" in state.expandedFacets.value)
+
+        // When / Then
+        state.toggleFacetExpanded("tag")
+        assertTrue("tag" in state.expandedFacets.value)
+
+        state.toggleFacetExpanded("tag")
+        assertFalse("tag" in state.expandedFacets.value)
+    }
+
+    @Test
+    fun `reopening folds every facet back`() = runBlocking {
+        // Given — a facet left open by the file before this one is a control nobody touched.
+        openFolder()
+        state.toggleFacetExpanded("tag")
+
+        // When
+        state.open(listOf(File(folder, "2026-07-22")))
+        withTimeout(TIMEOUT_MILLIS) { state.source.first { source -> source != null && source.files.size == 1 } }
+
+        // Then
+        assertEquals(emptySet<String>(), state.expandedFacets.value)
+    }
+
+    @Test
     fun `a facet still narrows the timeline, unlike the time window`() = runBlocking {
         // Given — only the time window is lifted for the strip; every other term still applies.
         openFolder()

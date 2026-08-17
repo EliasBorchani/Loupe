@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +26,10 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -52,10 +57,13 @@ import dev.loupe.desktop.state.ViewMode
 import dev.loupe.desktop.format.Formatters
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
-import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 
 private val TIME_WIDTH = 84.dp
+
+/** `MM-dd` in the mono face, which is the day beside a row when a source spans more than one. */
+private val DATE_WIDTH = 38.dp
 private val LEVEL_WIDTH = 16.dp
 private val FACET_WIDTH = 132.dp
 
@@ -84,6 +92,7 @@ fun LogList(
     onMoveSelection: (delta: Int, extend: Boolean) -> Unit,
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
+    onVisibleSpanChange: (VisibleSpan?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
@@ -99,6 +108,22 @@ fun LogList(
     val levelCount: Int = index.profile.levelCount
     val levelSymbols: List<String> = remember(index) { index.profile.levelDecoder?.order ?: emptyList() }
 
+    // A folder of day files reads `23:59:58.114` on the 21st and on the 28th alike. The date only
+    // earns its width when there is more than one of them, so a single-file open pays nothing.
+    val spansDays: Boolean = remember(index) {
+        Formatters.spansMultipleDays(index.minTimestampMillis, index.maxTimestampMillis)
+    }
+
+    // `derivedStateOf` so the header recomposes when the *day* changes rather than on every pixel
+    // of scroll — `firstVisibleItemIndex` moves continuously and the string almost never does.
+    val visibleDay: String? by remember(results, index, spansDays) {
+        derivedStateOf {
+            if (!spansDays || results.matchCount == 0) return@derivedStateOf null
+            val position: Int = listState.firstVisibleItemIndex.coerceIn(0, results.matchCount - 1)
+            Formatters.day(index.timestamps[results.matches[position]])
+        }
+    }
+
     // The list takes focus when a file opens, so the arrows work without a click first. Clicking a
     // row focuses it too — its `clickable` makes it focusable — and the key handler sits on the
     // container, which still sees the event as it bubbles up from the focused row.
@@ -110,118 +135,179 @@ fun LogList(
         if (focus in 0 until results.matchCount) listState.keepInView(focus)
     }
 
-    Box(
-        modifier = modifier
-            .background(colors.surface)
-            .focusRequester(listFocus)
-            .focusable()
-            // Preview, not the bubbling pass: it runs on the way down to the focused node, so the
-            // arrow is ours before the LazyColumn or a focused row can read it as a scroll or a
-            // focus move. The Box wraps only the list, so a cursor in the query bar is untouched.
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val page: Int = maxOf(1, listState.layoutInfo.visibleItemsInfo.size - 1)
-                when {
-                    event.isMetaPressed && event.key == Key.A -> onSelectAll()
-                    event.isMetaPressed && event.key == Key.C -> onCopy()
-                    event.key == Key.DirectionDown || event.key == Key.J -> onMoveSelection(1, event.isShiftPressed)
-                    event.key == Key.DirectionUp || event.key == Key.K -> onMoveSelection(-1, event.isShiftPressed)
-                    event.key == Key.PageDown -> onMoveSelection(page, event.isShiftPressed)
-                    event.key == Key.PageUp -> onMoveSelection(-page, event.isShiftPressed)
-                    // Home and End are a page move large enough to hit the end, which stops there.
-                    event.key == Key.MoveHome -> onMoveSelection(-results.matchCount, event.isShiftPressed)
-                    event.key == Key.MoveEnd -> onMoveSelection(results.matchCount, event.isShiftPressed)
-                    // Anything else belongs to whoever asked for it — a swallowed key is worse
-                    // than an unhandled one.
-                    else -> return@onPreviewKeyEvent false
-                }
-                true
-            },
-    ) {
-        if (results.matchCount == 0) {
-            EmptyResults(Modifier.align(Alignment.Center))
-            return@Box
+    // What the timeline marks as "you are here". Through a snapshot flow rather than straight out of
+    // the composition: the layout info changes every scroll frame while the span it maps to changes
+    // roughly once per row, and `distinctUntilChanged` is what keeps the strip from redrawing for a
+    // scroll that did not move the cursor.
+    LaunchedEffect(listState, results, index) {
+        snapshotFlow {
+            val visible: List<LazyListItemInfo> = listState.layoutInfo.visibleItemsInfo
+            if (visible.isEmpty() || results.matchCount == 0) return@snapshotFlow null
+            val limit: Int = results.matchCount - 1
+            VisibleSpan(
+                index.timestamps[results.matches[visible.first().index.coerceIn(0, limit)]],
+                index.timestamps[results.matches[visible.last().index.coerceIn(0, limit)]],
+            )
         }
+            .distinctUntilChanged()
+            .collect(onVisibleSpanChange)
+    }
 
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            items(count = results.matchCount, key = { position -> results.matches[position] }) { position ->
-                val entry: Int = results.matches[position]
-                val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(source, entry) }
-                val ordinal: Int = index.levels[entry].toInt()
-                val selected: Boolean = selection != null && position in selection
-                val focused: Boolean = selection?.focus == position
+    Column(modifier = modifier) {
+        // Which day you are looking at, kept on screen: the row that carries the date scrolls away,
+        // and without this the answer is only ever in the detail pane.
+        visibleDay?.let { day -> DayHeader(day) }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            when {
-                                // The focused row is the one the detail pane describes, so it reads
-                                // a shade stronger than the rest of the run.
-                                focused -> colors.accentSoft
-                                selected -> colors.accentSoft.copy(alpha = 0.55f)
-                                else -> colors.surfaceForLevel(ordinal, levelCount)
-                            },
-                        )
-                        .clickable {
-                            if (windowInfo.keyboardModifiers.isShiftPressed) onExtendTo(position) else onSelectAt(position)
-                        }
-                        .padding(horizontal = Spacing.medium, vertical = 1.dp),
-                ) {
-                    when (viewMode) {
-                        ViewMode.Columns -> ColumnsRow(
-                            source = source,
-                            entry = entry,
-                            ordinal = ordinal,
-                            levelSymbols = levelSymbols,
-                            rendered = rendered,
-                            expanded = entry in expandedEntries,
-                            onToggleExpanded = { onToggleExpanded(entry) },
-                        )
-
-                        ViewMode.Raw -> RawRow(
-                            rendered = rendered,
-                            ordinal = ordinal,
-                            levelCount = levelCount,
-                            expanded = entry in expandedEntries,
-                            sideways = sideways,
-                            onToggleExpanded = { onToggleExpanded(entry) },
-                        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(colors.surface)
+                .focusRequester(listFocus)
+                .focusable()
+                // Preview, not the bubbling pass: it runs on the way down to the focused node, so
+                // the arrow is ours before the LazyColumn or a focused row can read it as a scroll
+                // or a focus move. The Box wraps only the list, so a cursor in the query bar is
+                // untouched — and the day header above is not inside it either.
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val page: Int = maxOf(1, listState.layoutInfo.visibleItemsInfo.size - 1)
+                    when {
+                        event.isMetaPressed && event.key == Key.A -> onSelectAll()
+                        event.isMetaPressed && event.key == Key.C -> onCopy()
+                        event.key == Key.DirectionDown || event.key == Key.J -> onMoveSelection(1, event.isShiftPressed)
+                        event.key == Key.DirectionUp || event.key == Key.K -> onMoveSelection(-1, event.isShiftPressed)
+                        event.key == Key.PageDown -> onMoveSelection(page, event.isShiftPressed)
+                        event.key == Key.PageUp -> onMoveSelection(-page, event.isShiftPressed)
+                        // Home and End are a page move large enough to hit the end, which stops there.
+                        event.key == Key.MoveHome -> onMoveSelection(-results.matchCount, event.isShiftPressed)
+                        event.key == Key.MoveEnd -> onMoveSelection(results.matchCount, event.isShiftPressed)
+                        // Anything else belongs to whoever asked for it — a swallowed key is worse
+                        // than an unhandled one.
+                        else -> return@onPreviewKeyEvent false
                     }
+                    true
+                },
+        ) {
+            if (results.matchCount == 0) {
+                EmptyResults(Modifier.align(Alignment.Center))
+                return@Box
+            }
 
-                    if (entry in expandedEntries) {
-                        rendered.continuations.forEach { line ->
-                            BasicText(
-                                text = line,
-                                style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
-                                maxLines = 1,
-                                overflow = if (viewMode == ViewMode.Raw) TextOverflow.Clip else TextOverflow.Ellipsis,
-                                softWrap = false,
-                                modifier = if (viewMode == ViewMode.Raw) {
-                                    Modifier.horizontalScroll(sideways)
-                                } else {
-                                    Modifier.padding(start = TIME_WIDTH)
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                items(count = results.matchCount, key = { position -> results.matches[position] }) { position ->
+                    val entry: Int = results.matches[position]
+                    val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(source, entry) }
+                    val ordinal: Int = index.levels[entry].toInt()
+                    val selected: Boolean = selection != null && position in selection
+                    val focused: Boolean = selection?.focus == position
+                    // The date is printed where it changes, against the previous row **of the
+                    // result** — with a filter on, that is the row above on screen, which is the
+                    // only one the reader can compare it with.
+                    val opensDay: Boolean = spansDays && (
+                        position == 0 ||
+                            Formatters.epochDay(index.timestamps[entry]) !=
+                            Formatters.epochDay(index.timestamps[results.matches[position - 1]])
+                        )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                when {
+                                    // The focused row is the one the detail pane describes, so it reads
+                                    // a shade stronger than the rest of the run.
+                                    focused -> colors.accentSoft
+                                    selected -> colors.accentSoft.copy(alpha = 0.55f)
+                                    else -> colors.surfaceForLevel(ordinal, levelCount)
                                 },
                             )
+                            .clickable {
+                                if (windowInfo.keyboardModifiers.isShiftPressed) onExtendTo(position) else onSelectAt(position)
+                            }
+                            .padding(horizontal = Spacing.medium, vertical = 1.dp),
+                    ) {
+                        when (viewMode) {
+                            ViewMode.Columns -> ColumnsRow(
+                                source = source,
+                                entry = entry,
+                                ordinal = ordinal,
+                                levelSymbols = levelSymbols,
+                                rendered = rendered,
+                                hasDateColumn = spansDays,
+                                opensDay = opensDay,
+                                expanded = entry in expandedEntries,
+                                onToggleExpanded = { onToggleExpanded(entry) },
+                            )
+
+                            ViewMode.Raw -> RawRow(
+                                rendered = rendered,
+                                ordinal = ordinal,
+                                levelCount = levelCount,
+                                expanded = entry in expandedEntries,
+                                sideways = sideways,
+                                onToggleExpanded = { onToggleExpanded(entry) },
+                            )
+                        }
+
+                        if (entry in expandedEntries) {
+                            rendered.continuations.forEach { line ->
+                                BasicText(
+                                    text = line,
+                                    style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
+                                    maxLines = 1,
+                                    overflow = if (viewMode == ViewMode.Raw) TextOverflow.Clip else TextOverflow.Ellipsis,
+                                    softWrap = false,
+                                    modifier = if (viewMode == ViewMode.Raw) {
+                                        Modifier.horizontalScroll(sideways)
+                                    } else {
+                                        // Under the message, which the date column has pushed right
+                                        // by its own width plus the Row's spacing.
+                                        Modifier.padding(
+                                            start = if (spansDays) TIME_WIDTH + DATE_WIDTH + Spacing.small else TIME_WIDTH,
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // fillMaxHeight, never fillMaxSize: a scrollbar stretched over the full width sits on top
-        // of every row and swallows the clicks and drags meant for them.
-        VerticalScrollbar(
-            adapter = rememberScrollbarAdapter(listState),
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-        )
-
-        if (viewMode == ViewMode.Raw) {
-            HorizontalScrollbar(
-                adapter = rememberScrollbarAdapter(sideways),
-                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+            // fillMaxHeight, never fillMaxSize: a scrollbar stretched over the full width sits on top
+            // of every row and swallows the clicks and drags meant for them.
+            VerticalScrollbar(
+                adapter = rememberScrollbarAdapter(listState),
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
+
+            if (viewMode == ViewMode.Raw) {
+                HorizontalScrollbar(
+                    adapter = rememberScrollbarAdapter(sideways),
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                )
+            }
         }
+    }
+}
+
+/** Which day the top of the list is showing, because the row that carries the date scrolls away. */
+@Composable
+private fun DayHeader(day: String) {
+    val colors = LoupeTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(Spacing.rowHeight)
+            .background(colors.sunken)
+            .padding(horizontal = Spacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(
+            text = day,
+            style = LoupeTheme.type.label.copy(color = colors.inkSecondary),
+            maxLines = 1,
+        )
     }
 }
 
@@ -253,6 +339,8 @@ private fun ColumnsRow(
     ordinal: Int,
     levelSymbols: List<String>,
     rendered: RenderedEntry,
+    hasDateColumn: Boolean,
+    opensDay: Boolean,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
 ) {
@@ -261,6 +349,16 @@ private fun ColumnsRow(
     val mono = LoupeTheme.type.mono
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+        // A column of its own rather than a wider timestamp string: blanking the repeats then costs
+        // nothing and the times stay aligned without assuming the mono advance width.
+        if (hasDateColumn) {
+            BasicText(
+                text = if (opensDay) Formatters.monthDay(index.timestamps[entry]) else "",
+                style = mono.copy(color = colors.inkSecondary),
+                maxLines = 1,
+                modifier = Modifier.width(DATE_WIDTH),
+            )
+        }
         BasicText(
             text = Formatters.millisecond(index.timestamps[entry]),
             style = mono.copy(color = colors.inkTertiary),

@@ -151,6 +151,10 @@ class LoupeState(private val scope: CoroutineScope) {
     private val _expandedEntries = MutableStateFlow<Set<Int>>(emptySet())
     val expandedEntries: StateFlow<Set<Int>> = _expandedEntries.asStateFlow()
 
+    /** Which facets have been opened past their top-N, by facet name. */
+    private val _expandedFacets = MutableStateFlow<Set<String>>(emptySet())
+    val expandedFacets: StateFlow<Set<String>> = _expandedFacets.asStateFlow()
+
     private var openJob: Job? = null
 
     /**
@@ -178,6 +182,7 @@ class LoupeState(private val scope: CoroutineScope) {
             _selection.value = null
             _showParseReport.value = false
             _expandedEntries.value = emptySet()
+            _expandedFacets.value = emptySet()
             try {
                 val opened: LogSource = withContext(Dispatchers.IO) {
                     // Re-read on every open, so editing a profile needs no restart — which is the
@@ -339,6 +344,19 @@ class LoupeState(private val scope: CoroutineScope) {
     fun toggleExpanded(entry: Int) {
         _expandedEntries.value = _expandedEntries.value.let { open ->
             if (entry in open) open - entry else open + entry
+        }
+    }
+
+    /**
+     * Opens a facet past its top-N, or folds it back.
+     *
+     * The sidebar's `+ n more` line said how many values were hidden and gave no way to see them.
+     * It is still bounded when open — see `MAX_SEARCH_RESULTS` in `FacetSidebar` for the count that
+     * made the bound necessary.
+     */
+    fun toggleFacetExpanded(facet: String) {
+        _expandedFacets.value = _expandedFacets.value.let { open ->
+            if (facet in open) open - facet else open + facet
         }
     }
 

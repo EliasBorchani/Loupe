@@ -63,8 +63,10 @@ fun FacetSidebar(
     source: LogSource,
     results: Results,
     query: String,
+    expandedFacets: Set<String>,
     onToggleValue: (field: String, value: String) -> Unit,
     onClearField: (String) -> Unit,
+    onToggleExpanded: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
@@ -105,8 +107,10 @@ fun FacetSidebar(
                 dictionary = index.facetDictionaries[facetIndex],
                 counts = results.counts.facets.getOrNull(facetIndex) ?: IntArray(0),
                 query = query,
+                expanded = facet.name in expandedFacets,
                 onToggleValue = onToggleValue,
                 onClearField = onClearField,
+                onToggleExpanded = { onToggleExpanded(facet.name) },
             )
         }
     }
@@ -118,12 +122,16 @@ private fun FacetValues(
     dictionary: ValueDictionary,
     counts: IntArray,
     query: String,
+    expanded: Boolean,
     onToggleValue: (String, String) -> Unit,
     onClearField: (String) -> Unit,
+    onToggleExpanded: () -> Unit,
 ) {
     val colors = LoupeTheme.colors
     val selected: Set<String> = remember(query, facet.name) { QueryEdits.selectedValues(query, facet.name) }
-    var search by remember(facet.name) { mutableStateOf("") }
+    // Keyed on the dictionary rather than the name: two sources can both have a `tag` facet, and a
+    // search term left over from the file before this one is a filter nobody typed.
+    var search by remember(dictionary) { mutableStateOf("") }
 
     // A release build's tag facet has 817 distinct values, most of them R8 noise like "ou1".
     // A flat list is unusable, so anything that big gets top-N plus a search box.
@@ -131,14 +139,16 @@ private fun FacetValues(
 
     val ordered: List<Int> = remember(query, search, facet.name, counts) {
         dictionary.idsByDescendingCount()
-            .filter { id -> counts.getOrElse(id) { 0 } > 0 || dictionary.valueOf(id) in selected }
+            // Case-insensitively, like the tick mark below: a value selected in another case than
+            // the dictionary holds was filtered out here and its ticked row never appeared.
+            .filter { id -> counts.getOrElse(id) { 0 } > 0 || selected.any { value -> value.equals(dictionary.valueOf(id), ignoreCase = true) } }
             .filter { id -> search.isEmpty() || dictionary.valueOf(id).contains(search, ignoreCase = true) }
             .toList()
     }
     val shown: List<Int> = when {
         !searchable -> ordered
-        search.isEmpty() -> ordered.take(TOP_N)
-        else -> ordered.take(MAX_SEARCH_RESULTS)
+        search.isNotEmpty() || expanded -> ordered.take(MAX_SEARCH_RESULTS)
+        else -> ordered.take(TOP_N)
     }
 
     FacetGroup(
@@ -170,7 +180,9 @@ private fun FacetValues(
             }
         }
 
-        val peak: Int = shown.maxOfOrNull { id -> counts.getOrElse(id) { 0 } } ?: 0
+        // Over `ordered`, not `shown`: scaled to the rows on screen, every bar rescaled under the
+        // click that revealed the rest, and a distribution that changes scale is not one.
+        val peak: Int = ordered.maxOfOrNull { id -> counts.getOrElse(id) { 0 } } ?: 0
         shown.forEach { id ->
             FacetRow(
                 label = dictionary.valueOf(id),
@@ -181,11 +193,24 @@ private fun FacetValues(
                 onClick = { onToggleValue(facet.name, dictionary.valueOf(id)) },
             )
         }
-        if (ordered.size > shown.size) {
+        val hidden: Int = ordered.size - shown.size
+        // While a search is running the list is already at the cap, so opening the facet would
+        // change nothing: the line states the count and the search box stays the way through.
+        val toggles: Boolean = search.isEmpty() && (hidden > 0 || expanded)
+        if (hidden > 0 || toggles) {
             BasicText(
-                text = "+ ${ordered.size - shown.size} more",
-                style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
-                modifier = Modifier.padding(start = Spacing.small, top = Spacing.tiny),
+                text = when {
+                    !toggles -> "+ $hidden more — narrow the search"
+                    hidden == 0 -> "− show less"
+                    expanded -> "− show less · $hidden still hidden, search to reach them"
+                    else -> "+ $hidden more"
+                },
+                style = LoupeTheme.type.uiSmall.copy(
+                    color = if (toggles) colors.accent else colors.inkTertiary,
+                ),
+                modifier = Modifier
+                    .then(if (toggles) Modifier.clickable(onClick = onToggleExpanded) else Modifier)
+                    .padding(start = Spacing.small, top = Spacing.tiny, end = Spacing.small, bottom = Spacing.tiny),
             )
         }
     }
@@ -194,11 +219,15 @@ private fun FacetValues(
 private const val TOP_N = 8
 
 /**
- * How many search results a facet shows at once.
+ * How many values a facet shows at once past its top-N — while searching, and while expanded.
  *
  * The list below is a plain `Column`, not a `LazyColumn` — for eight rows that is the right call. But
  * typing one character used to compose *every* match, and a release build's tag facet has 817 values,
  * so one keystroke built 817 rows. Bounded now, and the "n more" line below already says so.
+ *
+ * The bound holds for the expand toggle for the same reason, and it is not a per-click cost: the
+ * counts under these rows are recomputed on every keystroke in the query bar, so an unbounded
+ * disclosure would pay for 817 rows again on each one.
  */
 private const val MAX_SEARCH_RESULTS = 40
 

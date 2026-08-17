@@ -139,6 +139,7 @@ private fun LoupeApp(
     val notice: String? by state.notice.collectAsState()
     val showParseReport: Boolean by state.showParseReport.collectAsState()
     val expandedEntries: Set<Int> by state.expandedEntries.collectAsState()
+    val expandedFacets: Set<String> by state.expandedFacets.collectAsState()
 
     val dropTarget = remember {
         object : DragAndDropTarget {
@@ -183,6 +184,7 @@ private fun LoupeApp(
                 notice = notice,
                 showParseReport = showParseReport,
                 expandedEntries = expandedEntries,
+                expandedFacets = expandedFacets,
                 queryFocus = queryFocus,
                 onCopyText = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(StringSelection(text))) } },
             )

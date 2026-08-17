@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,11 +71,16 @@ internal fun Loaded(
     notice: String?,
     showParseReport: Boolean,
     expandedEntries: Set<Int>,
+    expandedFacets: Set<String>,
     queryFocus: FocusRequester,
     onCopyText: (String) -> Unit,
 ) {
     val catchingUp: Boolean = state.isCatchingUp(results)
     val scope: CoroutineScope = rememberCoroutineScope()
+    // Which slice of time the list is showing, reported up by it and marked by the timeline. Held
+    // here rather than in LoupeState: it is where the viewport happens to be, not what was asked
+    // for, and it changes as fast as a scroll.
+    var visibleSpan: VisibleSpan? by remember(source) { mutableStateOf(null) }
     val copySelection: () -> Unit = { scope.launch { state.copySelection()?.let(onCopyText) } }
     // The row the detail pane describes: the moving end of the selection.
     val focusedEntry: Int? = results
@@ -104,8 +113,10 @@ internal fun Loaded(
                     source = source,
                     results = results,
                     query = query,
+                    expandedFacets = expandedFacets,
                     onToggleValue = state::toggleFacetValue,
                     onClearField = state::clearField,
+                    onToggleExpanded = state::toggleFacetExpanded,
                     modifier = Modifier.width(SIDEBAR_WIDTH).fillMaxSize(),
                 )
                 VerticalDivider()
@@ -116,6 +127,7 @@ internal fun Loaded(
                     TimelineStrip(
                         source = source,
                         results = results,
+                        visibleSpan = visibleSpan,
                         onBrush = state::setTimeWindow,
                     )
                     Divider()
@@ -131,6 +143,7 @@ internal fun Loaded(
                         onMoveSelection = state::moveSelection,
                         onSelectAll = state::selectAll,
                         onCopy = copySelection,
+                        onVisibleSpanChange = { span -> visibleSpan = span },
                         modifier = Modifier.weight(1f),
                     )
                 } else {
