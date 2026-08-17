@@ -1,5 +1,6 @@
 package dev.loupe.core.source
 
+import dev.loupe.core.parse.WithingsFormat
 import dev.loupe.core.profile.CompiledProfile
 import dev.loupe.core.profile.FieldRole
 import dev.loupe.core.profile.LogProfileSpec
@@ -173,6 +174,10 @@ class AdapterProfilePairingTest {
         // Then — the continuation indent is this width, in Kotlin and in three TOML regexes.
         assertEquals(CanonicalLine.TIMESTAMP_WIDTH, formatted.length, formatted)
         assertEquals(CanonicalLine.TIMESTAMP_WIDTH, CanonicalLine.CONTINUATION_INDENT.length)
+
+        // HealthMate's FileLogger happens to use the same width. Deliberately not the same constant —
+        // that would say their format moves when ours does — so the coincidence is asserted instead.
+        assertEquals(CanonicalLine.TIMESTAMP_WIDTH, WithingsFormat.TIMESTAMP_LENGTH)
     }
 
     @Test

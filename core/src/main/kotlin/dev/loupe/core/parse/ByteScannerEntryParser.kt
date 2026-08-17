@@ -51,20 +51,21 @@ class ByteScannerEntryParser(override val profile: CompiledProfile) : EntryParse
     override fun parseOpening(buffer: ByteArray, start: Int, end: Int, sink: ParsedEntry): Boolean {
         if (!WithingsFormat.opensEntry(buffer, start, end)) return false
 
-        // ts [L] [
-        if (buffer[start + 23] != SPACE ||
-            buffer[start + 24] != OPEN_BRACKET ||
-            buffer[start + 26] != CLOSE_BRACKET ||
-            buffer[start + 27] != SPACE ||
-            buffer[start + 28] != OPEN_BRACKET
+        // ts [L] [ — offsets counted off the timestamp rather than written out, so they follow it.
+        val afterTimestamp: Int = start + WithingsFormat.TIMESTAMP_LENGTH
+        if (buffer[afterTimestamp] != SPACE ||
+            buffer[afterTimestamp + 1] != OPEN_BRACKET ||
+            buffer[afterTimestamp + 3] != CLOSE_BRACKET ||
+            buffer[afterTimestamp + 4] != SPACE ||
+            buffer[afterTimestamp + 5] != OPEN_BRACKET
         ) {
             return false
         }
 
-        val levelOrdinal: Int = levelDecoder.ordinalOfSingleByte(buffer[start + 25])
+        val levelOrdinal: Int = levelDecoder.ordinalOfSingleByte(buffer[afterTimestamp + 2])
         if (levelOrdinal == LevelDecoder.UNKNOWN_ORDINAL) return false
 
-        val firstTokenStart: Int = start + 29
+        val firstTokenStart: Int = afterTimestamp + 6
         val firstTokenEnd: Int = indexOfClosingBracket(buffer, firstTokenStart, end)
         if (firstTokenEnd < 0) return false
 
