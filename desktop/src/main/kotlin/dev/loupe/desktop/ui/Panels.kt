@@ -552,7 +552,7 @@ fun DetailPane(
     val colors = LoupeTheme.colors
     val index: LogIndex = source.index
     val zone: ZoneId = remember { ZoneId.systemDefault() }
-    val raw: String = remember(entry, source) { EntryRenderer.render(index, source.text, entry).raw }
+    val raw: String = remember(entry, source) { EntryRenderer.render(source, entry).raw }
     var showContext by remember(entry) { mutableStateOf(false) }
 
     Column(
@@ -638,7 +638,7 @@ private fun UnfilteredContext(source: LogSource, focused: Int, context: IntRange
         context.forEach { entry ->
             val ordinal: Int = source.index.levels[entry].toInt()
             val text: String = remember(entry, source) {
-                EntryRenderer.render(source.index, source.text, entry).raw.substringBefore('\n')
+                EntryRenderer.render(source, entry).raw.substringBefore('\n')
             }
             BasicText(
                 text = text,

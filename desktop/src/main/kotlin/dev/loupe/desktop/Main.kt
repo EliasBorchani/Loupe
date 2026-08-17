@@ -63,6 +63,7 @@ import dev.loupe.desktop.ui.StatusBar
 import dev.loupe.desktop.ui.TimelineStrip
 import dev.loupe.desktop.ui.VerticalDivider
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -202,7 +203,8 @@ private fun Loaded(
     onCopyText: (String) -> Unit,
 ) {
     val catchingUp: Boolean = state.isCatchingUp(results)
-    val copySelection: () -> Unit = { state.copySelection()?.let(onCopyText) }
+    val scope: CoroutineScope = rememberCoroutineScope()
+    val copySelection: () -> Unit = { scope.launch { state.copySelection()?.let(onCopyText) } }
     // The row the detail pane describes: the moving end of the selection.
     val focusedEntry: Int? = results
         ?.takeIf { current -> current.matchCount > 0 }

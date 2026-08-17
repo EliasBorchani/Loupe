@@ -29,13 +29,9 @@ object EntryExport {
         target: File,
         onProgress: ((written: Int, total: Int) -> Unit)? = null,
     ): Int {
-        val index: LogIndex = source.index
         target.bufferedWriter(bufferSize = BUFFER_BYTES).use { writer: BufferedWriter ->
             for (position in 0 until count) {
-                val entry: Int = entries[position]
-                writer.write(
-                    source.text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]),
-                )
+                writer.write(source.rawText(entries[position]))
                 writer.newLine()
                 if (position % PROGRESS_EVERY == 0) onProgress?.invoke(position, count)
             }

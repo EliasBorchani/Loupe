@@ -41,6 +41,16 @@ class LogSource(
     private val temporaryDirectory: File?,
 ) : Closeable {
 
+    /**
+     * One entry's text, exactly as its file had it.
+     *
+     * The only place `(fileId, byteOffset, byteLength)` are read together. That triple was spelled
+     * out in three places — the renderer, the exporter and the clipboard — and a fourth would have
+     * been written the next time something needed an entry's text.
+     */
+    fun rawText(entry: Int): String =
+        text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry])
+
     override fun close() {
         // Unmap before deleting: the converted text lives in that directory.
         text.close()

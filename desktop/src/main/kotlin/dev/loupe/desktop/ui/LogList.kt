@@ -149,7 +149,7 @@ fun LogList(
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(count = results.matchCount, key = { position -> results.matches[position] }) { position ->
                 val entry: Int = results.matches[position]
-                val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(index, source.text, entry) }
+                val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(source, entry) }
                 val ordinal: Int = index.levels[entry].toInt()
                 val selected: Boolean = selection != null && position in selection
                 val focused: Boolean = selection?.focus == position

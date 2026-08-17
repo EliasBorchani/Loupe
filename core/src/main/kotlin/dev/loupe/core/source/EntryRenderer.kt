@@ -27,10 +27,8 @@ class RenderedEntry(
  */
 object EntryRenderer {
 
-    fun render(index: LogIndex, text: TextSources, entry: Int): RenderedEntry = render(
-        profile = index.profile,
-        raw = text.decode(index.fileIdOf(entry), index.byteOffsets[entry], index.byteLengths[entry]),
-    )
+    fun render(source: LogSource, entry: Int): RenderedEntry =
+        render(profile = source.profile, raw = source.rawText(entry))
 
     fun render(profile: CompiledProfile, raw: String): RenderedEntry {
         val lines: List<String> = raw.split('\n')

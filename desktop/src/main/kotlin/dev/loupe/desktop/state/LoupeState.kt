@@ -277,19 +277,22 @@ class LoupeState(private val scope: CoroutineScope) {
      * pasting into a ticket. Export writes the whole thing. The cap is reported rather than applied
      * silently — a truncated paste that says nothing is how a bug report ends up missing its cause.
      *
+     * Suspending because it is not free: up to [CLIPBOARD_MAX_ENTRIES] entries are decoded out of
+     * mmapped text and joined into one string, and it used to do that on the caller's thread — which
+     * is Compose's. A ⌘A followed by a copy froze the window for as long as it took.
+     *
      * @param maxEntries seam for the test; defaults to [CLIPBOARD_MAX_ENTRIES].
      * @return the text, or `null` when nothing is selected.
      */
-    fun copySelection(maxEntries: Int = CLIPBOARD_MAX_ENTRIES): String? {
+    suspend fun copySelection(maxEntries: Int = CLIPBOARD_MAX_ENTRIES): String? {
         val source: LogSource = _source.value ?: return null
         val current: Results = results.value ?: return null
         val selection: Selection = _selection.value?.coercedTo(current.matchCount) ?: return null
 
         val total: Int = selection.size
         val taken: Int = minOf(total, maxEntries)
-        val text: String = (0 until taken).joinToString("\n") { offset ->
-            val entry: Int = current.matches[selection.first + offset]
-            source.text.decode(source.index.fileIdOf(entry), source.index.byteOffsets[entry], source.index.byteLengths[entry])
+        val text: String = withContext(Dispatchers.IO) {
+            (0 until taken).joinToString("\n") { offset -> source.rawText(current.matches[selection.first + offset]) }
         }
 
         _notice.value = if (taken < total) {
