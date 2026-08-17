@@ -43,7 +43,7 @@ Packages are the responsibility buckets below — don't invent a new one without
 
 ```
 dev.loupe.core.{index, io, parse, profile, query, source}
-dev.loupe.desktop.{state, theme, ui}
+dev.loupe.desktop.{format, state, theme, ui}
 ```
 
 ## Conventions
