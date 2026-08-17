@@ -32,7 +32,26 @@ compose.desktop {
             macOS {
                 bundleID = "io.github.eborchani.loupe"
                 dockName = "Loupe"
+                // Two drawings in one .icns: the detailed one from 64px up, a simplified one at 16
+                // and 32 where it would otherwise collapse. Regenerate with tools/render-icon.sh.
+                iconFile.set(project.file("icon.icns"))
             }
         }
     }
+}
+
+// The packaged app takes its icon from the .icns above; `gradlew run` has no bundle, so the window
+// loads this PNG off the classpath instead.
+tasks.named<ProcessResources>("processResources") {
+    from(project.file("icon.png"))
+}
+
+// withType, not named("run"): the Compose plugin registers its run task later than this file is
+// evaluated, so looking it up by name fails outright — which is how this configuration silently
+// went missing once already, leaving `--args` paths resolving against desktop/ and the app opening
+// an empty window that looked exactly like a successful launch.
+val repositoryRoot: File = rootProject.projectDir
+tasks.withType<JavaExec>().configureEach {
+    // Paths passed on the command line are written relative to the repo root, not to this module.
+    workingDir = repositoryRoot
 }

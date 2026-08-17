@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    Loupe's app icon.
+
+    The thesis of the product in one image: outside the lens a log is an undifferentiated wall of
+    lines; inside it, the same lines resolve into structure — a metadata column, a message, and
+    exactly two rows carrying colour. Two, because that is the app's own rule: in a file where
+    seven lines in ten are Debug, colouring every level is the same as colouring none.
+
+    No handle. A jeweller's loupe has none, and leaving it off is what keeps this from being the
+    generic search glyph every other tool already uses.
+
+    Colours are LoupeTheme's dark palette — the ground is near-black with a green bias, so the
+    icon reads as its own thing against both a light and a dark desktop.
+  -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#182722"/>
+      <stop offset="1" stop-color="#0C1513"/>
+    </linearGradient>
+
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5FDCC4"/>
+      <stop offset="1" stop-color="#2FA98F"/>
+    </linearGradient>
+
+    <radialGradient id="glass" cx="0.35" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#1D2E29"/>
+      <stop offset="1" stop-color="#121D1A"/>
+    </radialGradient>
+
+    <clipPath id="lensClip">
+      <circle cx="512" cy="494" r="236"/>
+    </clipPath>
+
+    <clipPath id="cardClip">
+      <rect x="100" y="100" width="824" height="824" rx="186" ry="186"/>
+    </clipPath>
+  </defs>
+
+  <!-- The card. 824 inside 1024 is the margin macOS expects of an app icon. -->
+  <rect x="100" y="100" width="824" height="824" rx="186" ry="186" fill="url(#ground)"/>
+
+  <!-- The wall of text: uniform, dim, going nowhere. -->
+  <g clip-path="url(#cardClip)" fill="#2B3C35">
+    <rect x="188" y="214" width="560" height="26" rx="13"/>
+    <rect x="188" y="284" width="648" height="26" rx="13"/>
+    <rect x="188" y="354" width="498" height="26" rx="13"/>
+    <rect x="188" y="424" width="620" height="26" rx="13"/>
+    <rect x="188" y="494" width="544" height="26" rx="13"/>
+    <rect x="188" y="564" width="660" height="26" rx="13"/>
+    <rect x="188" y="634" width="512" height="26" rx="13"/>
+    <rect x="188" y="704" width="596" height="26" rx="13"/>
+    <rect x="188" y="774" width="452" height="26" rx="13"/>
+  </g>
+
+  <!-- Under the lens the same lines have fields, alignment and severity. -->
+  <circle cx="512" cy="494" r="236" fill="url(#glass)"/>
+
+  <g clip-path="url(#lensClip)">
+    <!-- row 1 — ordinary -->
+    <rect x="296" y="356" width="96" height="34" rx="17" fill="#82958F"/>
+    <rect x="416" y="356" width="330" height="34" rx="17" fill="#B9C7C2"/>
+
+    <!-- row 2 — warn -->
+    <rect x="296" y="424" width="96" height="34" rx="17" fill="#82958F"/>
+    <rect x="416" y="424" width="258" height="34" rx="17" fill="#D7A254"/>
+
+    <!-- row 3 — ordinary -->
+    <rect x="296" y="492" width="96" height="34" rx="17" fill="#82958F"/>
+    <rect x="416" y="492" width="368" height="34" rx="17" fill="#B9C7C2"/>
+
+    <!-- row 4 — error -->
+    <rect x="296" y="560" width="96" height="34" rx="17" fill="#82958F"/>
+    <rect x="416" y="560" width="300" height="34" rx="17" fill="#E27A6D"/>
+
+    <!-- row 5 — ordinary, trailing off -->
+    <rect x="296" y="628" width="96" height="34" rx="17" fill="#82958F"/>
+    <rect x="416" y="628" width="212" height="34" rx="17" fill="#B9C7C2"/>
+
+    <!-- A single highlight across the glass, so it reads as glass and not as a hole. -->
+    <ellipse cx="404" cy="360" rx="210" ry="118" fill="#FFFFFF" opacity="0.055"
+             transform="rotate(-28 404 360)"/>
+  </g>
+
+  <!-- The rim last, so nothing inside crosses it. -->
+  <circle cx="512" cy="494" r="236" fill="none" stroke="url(#ring)" stroke-width="42"/>
+  <circle cx="512" cy="494" r="258" fill="none" stroke="#0A1311" stroke-width="5" opacity="0.5"/>
+</svg>

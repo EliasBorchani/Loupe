@@ -22,11 +22,7 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
 
         /** The profiles shipped inside the jar, enumerated through the generated index. */
         fun bundled(): ProfileRegistry {
-            val index: String = requireNotNull(ProfileRegistry::class.java.getResourceAsStream(BUNDLED_INDEX)) {
-                "$BUNDLED_INDEX is missing — the generateProfileIndex task did not run"
-            }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
-
-            val loaded: List<CompiledProfile> = index.lineSequence()
+            val loaded: List<CompiledProfile> = readBundledIndex().lineSequence()
                 .map { line -> line.trim() }
                 .filter { line -> line.isNotEmpty() }
                 .map { fileName ->
@@ -39,6 +35,23 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
                 .toList()
             return ProfileRegistry(loaded)
         }
+
+        private fun readBundledIndex(): String =
+            requireNotNull(ProfileRegistry::class.java.getResourceAsStream(BUNDLED_INDEX)) {
+                "$BUNDLED_INDEX is missing — the generateProfileIndex task did not run"
+            }.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
+
+        /** File names of the bundled profiles, for anyone offering one as a starting point. */
+        fun bundledFileNames(): List<String> = readBundledIndex()
+            .lineSequence()
+            .map { line -> line.trim() }
+            .filter { line -> line.isNotEmpty() }
+            .toList()
+
+        /** The raw TOML of a bundled profile — heavily commented, which is the point of copying it. */
+        fun bundledSource(fileName: String): String? =
+            ProfileRegistry::class.java.getResourceAsStream("$BUNDLED_ROOT/$fileName")
+                ?.use { stream -> stream.readBytes().toString(Charsets.UTF_8) }
 
         /** Where a user drops their own profiles. Read on every open, so editing one needs no restart. */
         fun userDirectory(): File = File(System.getProperty("user.home"), ".loupe/profiles")

@@ -37,6 +37,9 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -76,13 +79,35 @@ fun main(args: Array<String>) {
 
     // Paths on the command line open straight away, which is what `loupe ~/logs` will do once the
     // CLI ships — and what makes the app testable without a human clicking a file dialog.
-    val initial: List<File> = args.map { path -> File(path) }.filter { file -> file.exists() }
+    //
+    // A path that does not exist is reported, not dropped. Silently ignoring it opens an empty
+    // window that looks exactly like a successful launch, which cost real time to notice.
+    val requested: List<File> = args.map { path -> File(path) }
+    val missing: List<File> = requested.filterNot { file -> file.exists() }
+    missing.forEach { file -> System.err.println("loupe: no such file or folder: ${file.absolutePath}") }
+    val initial: List<File> = requested - missing.toSet()
 
     application {
         val windowState = rememberWindowState(width = 1280.dp, height = 820.dp)
-        Window(onCloseRequest = ::exitApplication, title = "Loupe", state = windowState) {
+        val windowIcon: Painter = remember { loadWindowIcon() }
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "Loupe",
+            state = windowState,
+            // The packaged app takes its icon from the .icns; `gradlew run` has no bundle, so the
+            // window loads the PNG off the classpath.
+            icon = windowIcon,
+        ) {
+            val scope = rememberCoroutineScope()
+            val state = remember { LoupeState(scope) }
+            val queryFocus = remember { FocusRequester() }
+            val source: LogSource? by state.source.collectAsState()
+            val viewMode: ViewMode by state.viewMode.collectAsState()
+
+            LoupeMenuBar(state = state, source = source, viewMode = viewMode, queryFocus = queryFocus)
+
             LoupeTheme {
-                LoupeApp(initial)
+                LoupeApp(state = state, queryFocus = queryFocus, initialPaths = initial)
             }
         }
     }
@@ -90,9 +115,12 @@ fun main(args: Array<String>) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun LoupeApp(initialPaths: List<File> = emptyList()) {
+private fun LoupeApp(
+    state: LoupeState,
+    queryFocus: FocusRequester,
+    initialPaths: List<File> = emptyList(),
+) {
     val scope = rememberCoroutineScope()
-    val state = remember { LoupeState(scope) }
     val clipboard = LocalClipboard.current
 
     LaunchedEffect(Unit) {
@@ -108,8 +136,6 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
     val notice: String? by state.notice.collectAsState()
     val showParseReport: Boolean by state.showParseReport.collectAsState()
     val expandedEntries: Set<Int> by state.expandedEntries.collectAsState()
-
-    val queryFocus = remember { FocusRequester() }
 
     val dropTarget = remember {
         object : DragAndDropTarget {
@@ -346,7 +372,7 @@ private fun Opening(status: OpenStatus.Working) {
     }
 }
 
-private fun chooseAndOpen(state: LoupeState, add: Boolean) {
+internal fun chooseAndOpen(state: LoupeState, add: Boolean) {
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     val chooser = JFileChooser().apply {
         // Day files are named `2026-06-02` with no extension, and a folder of them is the normal
@@ -361,8 +387,22 @@ private fun chooseAndOpen(state: LoupeState, add: Boolean) {
     if (add) state.add(chosen) else state.open(chosen)
 }
 
+/**
+ * The window icon, decoded straight off the classpath.
+ *
+ * Not `painterResource`: it is deprecated in favour of the Compose resources library, which means a
+ * generated accessor class and another dependency — a lot of machinery for one PNG. Skia is already
+ * here as part of Compose Desktop and decodes it in a line.
+ */
+private fun loadWindowIcon(): Painter {
+    val bytes: ByteArray = requireNotNull(object {}.javaClass.getResourceAsStream("/icon.png")) {
+        "icon.png is not on the classpath — processResources should copy it from desktop/"
+    }.use { stream -> stream.readBytes() }
+    return BitmapPainter(org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap())
+}
+
 /** Suggests a name from what is open, so an export lands somewhere recognisable. */
-private fun chooseExportTarget(source: LogSource): File? {
+internal fun chooseExportTarget(source: LogSource): File? {
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     val suggested: String = if (source.files.size == 1) {
         "${source.files.first().name}-filtered.txt"

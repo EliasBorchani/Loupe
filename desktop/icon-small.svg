@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    The 16 and 32 pixel artwork.
+
+    Same mark, fewer facts. At 16px the detailed icon collapsed into a dark blob with a ghost of a
+    rim and an indistinct tan smudge where the rows should be — the surrounding wall of text turned
+    to noise, the metadata column merged with the message, and the amber and red averaged into mud.
+
+    So this drops everything that cannot survive: no page behind the lens, no metadata column, three
+    rows instead of five, and a rim at 8% of the width rather than 4% so it is still more than a
+    pixel wide when the whole icon is sixteen. What is left is the thing that has to read at that
+    size — a teal ring with one warm and one red line inside it.
+  -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B2C26"/>
+      <stop offset="1" stop-color="#0C1513"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67E2CB"/>
+      <stop offset="1" stop-color="#31B096"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="186" ry="186" fill="url(#ground)"/>
+
+  <circle cx="512" cy="512" r="272" fill="#101B18"/>
+
+  <!-- Three rows, wide enough to hold their colour at a sixth of this scale. -->
+  <g clip-path="url(#smallLens)">
+    <rect x="330" y="400" width="364" height="56" rx="28" fill="#C6D3CE"/>
+    <rect x="330" y="484" width="364" height="56" rx="28" fill="#E8B05C"/>
+    <rect x="330" y="568" width="364" height="56" rx="28" fill="#EC7F70"/>
+  </g>
+  <clipPath id="smallLens"><circle cx="512" cy="512" r="272"/></clipPath>
+
+  <circle cx="512" cy="512" r="272" fill="none" stroke="url(#ring)" stroke-width="82"/>
+</svg>

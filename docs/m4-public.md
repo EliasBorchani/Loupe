@@ -113,6 +113,62 @@ Deux décisions de conception :
 
 La documentation publique du format est dans [`profiles.md`](profiles.md).
 
+## L'icône
+
+`desktop/icon.svg` (détaillée) et `desktop/icon-small.svg` (16 et 32 px), assemblées en `.icns` par
+`tools/render-icon.sh`.
+
+Le concept est la thèse du produit en une image : hors de la loupe, un log est un mur de lignes
+indifférenciées ; dedans, les mêmes lignes se résolvent en colonnes, et **exactement deux** portent
+une couleur — parce que c'est la règle de l'app, où colorer tous les niveaux revient à n'en colorer
+aucun. **Pas de manche** : une loupe d'horloger n'en a pas, et c'est ce qui évite le glyphe de
+recherche générique que tout le monde utilise déjà.
+
+Deux dessins, parce que **le détaillé ne survit pas à 16 px** : la page derrière la loupe devient du
+bruit, la colonne de métadonnées fusionne avec le message, et l'ambre et le rouge se moyennent en
+boue. La variante ne garde que ce qui se lit à cette taille — trois barres, pas de page, et un
+cerclage à 8 % de la largeur au lieu de 4 % pour qu'il fasse encore plus d'un pixel.
+
+Rasterisation par Chrome headless faute de rasteriseur SVG installé, puis `sips` pour les
+réductions. Deux pièges, tous deux dans le script : Chrome pointé sur un `.svg` à dimensions
+intrinsèques **recadre** au lieu de mettre à l'échelle (d'où l'enrobage HTML), et il **plafonne**
+une fenêtre sous ~50 px (d'où le rendu unique en 1024 suivi de `sips`).
+
+## La barre de menus
+
+`LoupeMenuBar.kt`. Avec `apple.laf.useScreenMenuBar`, elle atterrit en haut de l'écran, là où un
+utilisateur Mac la cherche — et surtout là où une fonction se **découvre** : l'export et l'ajout de
+profil existaient déjà, aucun des deux n'était trouvable sans qu'on vous le dise.
+
+| Menu | |
+|---|---|
+| **File** | Open… ⌘O · Add Files… ⇧⌘O · Export Current Filter… ⌘E · Close Log |
+| **View** | Columns ⌘1 · Raw Line ⌘2 · Find ⌘F · Unrecognised Lines… |
+| **Profiles** | Reveal Profiles Folder · New from Template ▸ · Reload Profiles and Reopen |
+
+**Il n'y a délibérément pas de menu Edit.** Un raccourci de menu est capté par le menu natif avant
+que la fenêtre ne voie la touche : mettre Copy sur ⌘C et Select All sur ⌘A là-haut casserait les
+deux à l'intérieur du champ de requête — on sélectionnerait des lignes de log en croyant
+sélectionner du texte. Ils restent des gestionnaires au niveau de la fenêtre, portés par la liste
+qui les possède.
+
+« New from Template » copie un profil livré plutôt que de créer un fichier vide : ils sont
+abondamment commentés, et la façon la plus rapide de décrire un format est d'en éditer un qui
+marche. La copie est renommée dans le fichier aussi, sinon l'original et elle répondent au même nom
+et la détection a deux candidats indiscernables.
+
+## Un lancement qui mentait
+
+Le bloc `run { workingDir = rootProject.projectDir }` n'a **jamais** été committé : `tasks.named("run")`
+échoue à la configuration, parce que le plugin Compose enregistre sa tâche `run` après l'évaluation
+de ce fichier. Conséquence : `--args="spike/fixtures/folder"` se résolvait contre `desktop/`, ne
+pointait sur rien, et `main` filtrait le chemin inexistant **en silence** — l'app s'ouvrait vide,
+ce qui ressemble exactement à un lancement réussi.
+
+Corrigé des deux côtés : `tasks.withType<JavaExec>().configureEach` ne dépend pas de l'ordre
+d'enregistrement, et un chemin inexistant est désormais **signalé sur stderr** au lieu d'être
+écarté. Une entrée invalide qui ne dit rien coûte plus cher qu'une qui échoue.
+
 ## Reste
 
 **La notarisation Apple.** Elle demande un compte Apple Developer, un certificat *Developer ID
