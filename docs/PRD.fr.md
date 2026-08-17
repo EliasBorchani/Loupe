@@ -5,8 +5,7 @@
 > Doc de travail en français. Le repo public (README, docs, profils) sera en anglais — traduction au M4.
 > Repo personnel, licence **MIT**, public dès le départ.
 >
-> **État : M0, M1 et M2 terminés** — voir [`m0-perf-spike.md`](m0-perf-spike.md),
-> [`m1-core.md`](m1-core.md) et [`m2-ui.md`](m2-ui.md). Prochain jalon : M3 (produit).
+> **État : M0 à M3 terminés** — voir les docs `m0` à `m3`. Prochain jalon : M4 (publication).
 
 ---
 
@@ -231,7 +230,7 @@ Chiffres complets, protocole et pièges de mesure : [`m0-perf-spike.md`](m0-perf
 | ~~**M0 — Spike perf**~~ **✅ fait** | Indexation colonnaire + mmap + regex sur un log Withings synthétique de 1 Gio | **Toutes les cibles tenues, sur un corpus 1,8× plus gros que la référence du §8.** Harnais maison plutôt que JMH (une passe de plusieurs secondes est du `SingleShotTime`, où JMH ajoute du cérémonial sans ajouter de signal) → [`m0-perf-spike.md`](m0-perf-spike.md) |
 | ~~**M1 — Cœur**~~ **✅ fait** | Chargement de profil TOML, indexation, facettes, parseur de requête | **56 tests. Généricité complète pour +6 % (411 ns/entrée contre 386 au M0).** Le pré-filtre est désormais dérivé du profil → [`m1-core.md`](m1-core.md) |
 | ~~**M2 — UI utilisable**~~ **✅ fait** | Fenêtre, ouverture de dossier, liste virtualisée, sidebar de facettes, barre de requête | **Les trois arbitrages tranchés et implémentés ; timeline et panneau de détail livrés en avance sur le M3.** 86 tests → [`m2-ui.md`](m2-ui.md) |
-| **M3 — Produit** | Timeline, panneau détail, export, thèmes, raccourcis, santé du parse | `.dmg` installable, utilisé par l'équipe Android |
+| ~~**M3 — Produit**~~ **✅ fait** | Timeline, panneau détail, export, thèmes, raccourcis, santé du parse | **Sélection multiple faite main, clavier complet, contexte non filtré, export non plafonné.** 103 tests → [`m3-product.md`](m3-product.md) |
 | **M4 — Public** | README anglais, doc du format de profil, 5 profils livrés, CI, licence, notarisation | Repo GitHub publié |
 
 ---

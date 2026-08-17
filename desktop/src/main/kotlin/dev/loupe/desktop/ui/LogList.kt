@@ -2,7 +2,10 @@ package dev.loupe.desktop.ui
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -87,6 +91,10 @@ fun LogList(
     val colors = LoupeTheme.colors
     val listState = rememberLazyListState()
     val listFocus = remember { FocusRequester() }
+    // Shared across rows so they scroll as one. Raw mode only: in columns, scrolling sideways would
+    // push the timestamps off screen and destroy the alignment columns exist for — there, a line is
+    // truncated and the detail pane holds the rest.
+    val sideways: ScrollState = rememberScrollState()
     // `clickable` reports that a click happened, not which modifiers were down. The window does.
     val windowInfo = LocalWindowInfo.current
     val zone: ZoneId = remember { ZoneId.systemDefault() }
@@ -180,6 +188,7 @@ fun LogList(
                             ordinal = ordinal,
                             levelCount = levelCount,
                             expanded = entry in expandedEntries,
+                            sideways = sideways,
                             onToggleExpanded = { onToggleExpanded(entry) },
                         )
                     }
@@ -190,8 +199,13 @@ fun LogList(
                                 text = line,
                                 style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = TIME_WIDTH),
+                                overflow = if (viewMode == ViewMode.Raw) TextOverflow.Clip else TextOverflow.Ellipsis,
+                                softWrap = false,
+                                modifier = if (viewMode == ViewMode.Raw) {
+                                    Modifier.horizontalScroll(sideways)
+                                } else {
+                                    Modifier.padding(start = TIME_WIDTH)
+                                },
                             )
                         }
                     }
@@ -205,6 +219,13 @@ fun LogList(
             adapter = rememberScrollbarAdapter(listState),
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
         )
+
+        if (viewMode == ViewMode.Raw) {
+            HorizontalScrollbar(
+                adapter = rememberScrollbarAdapter(sideways),
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -283,22 +304,34 @@ private fun ColumnsRow(
     }
 }
 
+/**
+ * The line as written, scrolling sideways.
+ *
+ * The scroll goes on this Row and not on the item, so the selection highlight still spans the
+ * viewport while the text moves inside it. `weight(1f)` is gone with it: inside a horizontal scroll
+ * the width is unbounded, and a weight needs a bound.
+ */
 @Composable
 private fun RawRow(
     rendered: RenderedEntry,
     ordinal: Int,
     levelCount: Int,
     expanded: Boolean,
+    sideways: ScrollState,
     onToggleExpanded: () -> Unit,
 ) {
     val colors = LoupeTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+    Row(
+        modifier = Modifier.horizontalScroll(sideways),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.small),
+    ) {
         BasicText(
             text = rendered.raw.substringBefore('\n'),
             style = LoupeTheme.type.mono.copy(color = colors.inkForLevel(ordinal, levelCount)),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            softWrap = false,
+            overflow = TextOverflow.Clip,
         )
         FoldToggle(rendered, expanded, onToggleExpanded)
     }

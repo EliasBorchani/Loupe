@@ -8,7 +8,7 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0, M1, M2 done. M3 next.** 94 tests, `main`, no remote yet. Docs in `docs/` (French);
+**State: M0 – M3 done. M4 next.** 103 tests, `main`, no remote yet. Docs in `docs/` (French);
 the code, README and profiles are English.
 
 ---
@@ -123,7 +123,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 94 tests, all three modules
+./gradlew test                                   # 103 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg
 ./gradlew build                                  # must be warning-free
@@ -143,6 +143,7 @@ recognise, so it exercises the merge and the skip path.
 | `docs/m0-perf-spike.md` | Why the engine looks like this, and the numbers behind every claim. |
 | `docs/m1-core.md` | The profile system, and the exact-vs-necessary predicate distinction. |
 | `docs/m2-ui.md` | The three UI forks, decided, and what the screen deliberately does not do. |
+| `docs/m3-product.md` | Selection, keyboard, context and export — and why the clipboard is capped. |
 | `profiles/withings.logprofile.toml` | The reference profile, heavily commented — the format's spec. |
 
 ---

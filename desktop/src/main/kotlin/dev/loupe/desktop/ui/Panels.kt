@@ -519,6 +519,7 @@ private fun barColour(ordinal: Int, levelCount: Int, error: Color, warn: Color, 
 fun DetailPane(
     source: LogSource,
     entry: Int,
+    context: IntRange,
     onClose: () -> Unit,
     onCopy: () -> Unit,
     modifier: Modifier = Modifier,
@@ -527,6 +528,7 @@ fun DetailPane(
     val index: LogIndex = source.index
     val zone: ZoneId = remember { ZoneId.systemDefault() }
     val raw: String = remember(entry, source) { EntryRenderer.render(index, source.text, entry).raw }
+    var showContext by remember(entry) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -540,6 +542,13 @@ fun DetailPane(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
             BasicText("SELECTED ENTRY", style = LoupeTheme.type.label.copy(color = colors.inkTertiary))
             Spacer(Modifier.weight(1f))
+            if (!context.isEmpty()) {
+                BasicText(
+                    text = if (showContext) "entry" else "context ±${(context.last - context.first) / 2}",
+                    style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
+                    modifier = Modifier.clickable { showContext = !showContext },
+                )
+            }
             BasicText(
                 text = "copy",
                 style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
@@ -581,7 +590,41 @@ fun DetailPane(
                 .horizontalScroll(rememberScrollState())
                 .padding(Spacing.medium),
         ) {
-            BasicText(text = raw, style = LoupeTheme.type.mono.copy(color = colors.ink))
+            if (showContext) {
+                UnfilteredContext(source = source, focused = entry, context = context)
+            } else {
+                BasicText(text = raw, style = LoupeTheme.type.mono.copy(color = colors.ink))
+            }
+        }
+    }
+}
+
+/**
+ * The entries around the selected one, **ignoring the query**.
+ *
+ * What happened around a line is usually why it happened, and the filter has by definition hidden
+ * it — with `level>=E` on screen, this is where the Debug lines that led up to the error are. The
+ * focused entry keeps its highlight so it stays findable in the run.
+ */
+@Composable
+private fun UnfilteredContext(source: LogSource, focused: Int, context: IntRange) {
+    val colors = LoupeTheme.colors
+    Column {
+        context.forEach { entry ->
+            val ordinal: Int = source.index.levels[entry].toInt()
+            val text: String = remember(entry, source) {
+                EntryRenderer.render(source.index, source.text, entry).raw.substringBefore('\n')
+            }
+            BasicText(
+                text = text,
+                style = LoupeTheme.type.monoSmall.copy(
+                    color = if (entry == focused) colors.ink else colors.inkForLevel(ordinal, source.index.profile.levelCount),
+                ),
+                maxLines = 1,
+                modifier = Modifier
+                    .background(if (entry == focused) colors.accentSoft else colors.surfaceForLevel(ordinal, source.index.profile.levelCount))
+                    .padding(horizontal = Spacing.tiny),
+            )
         }
     }
 }
@@ -694,6 +737,7 @@ fun SourceHeader(
     source: LogSource,
     onOpen: () -> Unit,
     onAdd: () -> Unit,
+    onExport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
@@ -740,6 +784,11 @@ fun SourceHeader(
             text = "+ add…",
             style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
             modifier = Modifier.clickable(onClick = onAdd),
+        )
+        BasicText(
+            text = "export…",
+            style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
+            modifier = Modifier.clickable(onClick = onExport),
         )
     }
 }

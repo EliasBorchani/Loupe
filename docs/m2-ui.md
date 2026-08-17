@@ -83,15 +83,10 @@ servirait.
 
 ## Ce qui manque, et c'est assumé
 
-- **Sélection multiple et copie.** Un clic sélectionne une entrée, les flèches ↑/↓ déplacent la
-  sélection dans le résultat filtré, `copy` copie le texte brut. Le modèle clic / `⇧`+clic / `⌘A`
-  reste à écrire — c'est le risque identifié au PRD (`SelectionContainer` sur `LazyColumn` est
-  instable, donc le modèle sera fait main).
-- **Autres raccourcis.** `⌘F`, `⌘L`, `j`/`k`, `Page↑`/`Page↓` : rien pour l'instant. Le mécanisme
-  est en place (`LoupeState.moveSelection`), il ne manque que les touches.
-- **Contexte non filtré** autour de l'entrée sélectionnée (± N lignes).
-- **Défilement horizontal** de la liste : les lignes longues sont tronquées, le détail les montre
-  en entier.
+Le M3 a livré la sélection multiple, la copie, le clavier, le contexte non filtré, l'export et le
+défilement horizontal — voir [`m3-product.md`](m3-product.md). Restent :
+
+- **`⌘F` / `⌘L`** pour donner le focus à la barre de requête.
 - **Un seul profil livré.** `android-logcat`, `json-lines`, `syslog` attendent le M4.
 
 ## Essayer

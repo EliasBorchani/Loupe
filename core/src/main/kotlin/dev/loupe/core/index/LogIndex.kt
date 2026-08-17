@@ -89,6 +89,18 @@ class LogIndex(
     fun fileIdOf(entry: Int): Int =
         if (fileFacetIndex == NO_FACET) 0 else facetValues[fileFacetIndex][entry]
 
+    /**
+     * The entries around [entry], **ignoring any filter**.
+     *
+     * This is the point of it: what happened around a line is usually the reason it happened, and
+     * a filter has by definition hidden that. The range is over the index, so with `level>=E` on
+     * screen you still get the Debug lines that led up to the error.
+     */
+    fun neighbourhood(entry: Int, radius: Int): IntRange {
+        if (entryCount == 0) return IntRange.EMPTY
+        return (entry - radius).coerceAtLeast(0)..(entry + radius).coerceAtMost(entryCount - 1)
+    }
+
     fun facetIndexOf(name: String): Int = facets.indexOfFirst { facet -> facet.name == name }
 
     fun dictionaryOf(name: String): ValueDictionary? =

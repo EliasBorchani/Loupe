@@ -7,6 +7,7 @@ import dev.loupe.core.index.SidebarCounts
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
 import dev.loupe.core.query.QueryEdits
+import dev.loupe.core.source.EntryExport
 import dev.loupe.core.source.LogSource
 import dev.loupe.core.source.LogSourceLoader
 import dev.loupe.core.source.OpenPhase
@@ -290,6 +291,38 @@ class LoupeState(private val scope: CoroutineScope) {
         _notice.value = null
     }
 
+    /**
+     * Writes the whole current result to [target].
+     *
+     * The **result**, not the selection: "export the current filter" is what the button says, and
+     * narrowing further is what the query bar is for. Uncapped, off the UI thread, and it reports
+     * the count — an export that silently wrote a subset would be worse than no export.
+     */
+    fun export(target: File) {
+        val source: LogSource = _source.value ?: return
+        val current: Results = results.value ?: return
+        scope.launch {
+            _notice.value = "Exporting ${current.matchCount} entries…"
+            try {
+                val written: Int = withContext(Dispatchers.IO) {
+                    EntryExport.write(source, current.matches, current.matchCount, target)
+                }
+                _notice.value = "Exported $written entries to ${target.name}"
+            } catch (failure: Exception) {
+                _notice.value = "Export failed: ${failure.message ?: failure.toString()}"
+            }
+        }
+    }
+
+    /**
+     * The entries around the focused row, ignoring the filter.
+     *
+     * Step 6 of the PRD's scenario: what happened around a line is usually why it happened, and the
+     * query has by definition hidden it.
+     */
+    fun contextAround(entry: Int, radius: Int = CONTEXT_RADIUS): IntRange =
+        _source.value?.index?.neighbourhood(entry, radius) ?: IntRange.EMPTY
+
     fun toggleExpanded(entry: Int) {
         _expandedEntries.value = _expandedEntries.value.let { open ->
             if (entry in open) open - entry else open + entry
@@ -354,6 +387,9 @@ const val LEVEL_FIELD: String = "level"
 
 /** Select-all on a nine-million-entry result is gigabytes; the clipboard is for a ticket. */
 const val CLIPBOARD_MAX_ENTRIES: Int = 20_000
+
+/** Twenty either side is about a screenful, which is what "what was going on there" means. */
+const val CONTEXT_RADIUS: Int = 20
 
 /** Enough buckets that a 700 px strip has more than one per pixel column. */
 const val TIMELINE_BUCKETS: Int = 900

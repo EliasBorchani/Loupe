@@ -164,6 +164,7 @@ private fun Loaded(
             source = source,
             onOpen = { chooseAndOpen(state, add = false) },
             onAdd = { chooseAndOpen(state, add = true) },
+            onExport = { chooseExportTarget(source)?.let(state::export) },
         )
         Divider()
 
@@ -225,6 +226,7 @@ private fun Loaded(
             DetailPane(
                 source = source,
                 entry = entry,
+                context = state.contextAround(entry),
                 onClose = state::clearSelection,
                 onCopy = copySelection,
             )
@@ -317,6 +319,22 @@ private fun chooseAndOpen(state: LoupeState, add: Boolean) {
     val chosen: List<File> = chooser.selectedFiles.toList().ifEmpty { listOfNotNull(chooser.selectedFile) }
     if (chosen.isEmpty()) return
     if (add) state.add(chosen) else state.open(chosen)
+}
+
+/** Suggests a name from what is open, so an export lands somewhere recognisable. */
+private fun chooseExportTarget(source: LogSource): File? {
+    runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+    val suggested: String = if (source.files.size == 1) {
+        "${source.files.first().name}-filtered.txt"
+    } else {
+        "loupe-export.txt"
+    }
+    val chooser = JFileChooser().apply {
+        dialogTitle = "Export the current filter"
+        selectedFile = File(suggested)
+    }
+    if (chooser.showSaveDialog(null) != JFileChooser.APPROVE_OPTION) return null
+    return chooser.selectedFile
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

@@ -379,6 +379,56 @@ class LoupeStateTest {
     }
 
     @Test
+    fun `context reaches past the filter to what was actually around the line`() = runBlocking {
+        // Given — only the errors on screen.
+        val source: LogSource = openFolder()
+        state.setQuery("level:E")
+        assertEquals(1, awaitResults("level:E").matchCount)
+
+        // When
+        val context: IntRange = state.contextAround(entryWithMessage("gave-up"), radius = 2)
+
+        // Then — the Debug and Wpp entries the query hid are exactly the point of it.
+        val messages: List<String> = context.map { entry -> messageOf(source, entry) }
+        assertTrue("frame" in messages, messages.toString())
+        assertTrue("midnight" in messages, messages.toString())
+        assertTrue("gave-up" in messages, messages.toString())
+    }
+
+    @Test
+    fun `context stops at the ends of the file`() = runBlocking {
+        // Given
+        openFolder()
+        awaitResults("")
+
+        // When / Then — no negative index, no read past the end.
+        assertEquals(0, state.contextAround(0, radius = 10).first)
+        assertEquals(5, state.contextAround(5, radius = 10).last)
+    }
+
+    @Test
+    fun `export writes the whole result, uncapped`() = runBlocking {
+        // Given — the clipboard is capped, a file is not; this is the case someone reaches for it.
+        openFolder()
+        state.setQuery("category:Sync")
+        awaitResults("category:Sync")
+        val target = File(folder, "out.txt")
+
+        // When
+        state.export(target)
+        val notice: String = withTimeout(TIMEOUT_MILLIS) {
+            state.notice.first { text -> text != null && text.startsWith("Exported") }!!
+        }
+
+        // Then
+        assertTrue(notice.contains("3 entries"), notice)
+        val written: String = target.readText()
+        assertEquals(3, written.lines().count { line -> line.contains(" -> ") })
+        assertTrue(written.contains("java.lang.IllegalStateException")) { "an entry's continuations come with it" }
+        assertFalse(written.contains("-> frame")) { "the export is the filter, not the file" }
+    }
+
+    @Test
     fun `a typo is reported and the rest of the query still narrows`() = runBlocking {
         // Given
         openFolder()

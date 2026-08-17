@@ -53,14 +53,14 @@ Measured on a 1 GiB file — **9 013 588 entries, 11 066 525 lines** — on an A
 
 Every field comes from the profile — nothing about any format is compiled in. Method, caveats and
 the numbers that did *not* meet target on the first attempt:
-[`docs/m0-perf-spike.md`](docs/m0-perf-spike.md), [`docs/m1-core.md`](docs/m1-core.md) and
-[`docs/m2-ui.md`](docs/m2-ui.md) (in French).
+[`docs/m0-perf-spike.md`](docs/m0-perf-spike.md), [`docs/m1-core.md`](docs/m1-core.md),
+[`docs/m2-ui.md`](docs/m2-ui.md), and [`docs/m3-product.md`](docs/m3-product.md) (in French).
 
 ## Building
 
 ```bash
 ./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
-./gradlew test                           # 94 tests
+./gradlew test                           # 103 tests
 ./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
 ./gradlew :desktop:packageDmg            # unsigned .dmg
 ```
@@ -74,8 +74,8 @@ Requires JDK 17+. No other setup.
 | **M0** | Performance spike — columnar index, parser strategies, benchmarks | ✅ done |
 | **M1** | Core — TOML profiles, format auto-detection, query language | ✅ done |
 | **M2** | UI — Compose Multiplatform window, virtualised list, facets, query bar, timeline | ✅ done |
-| **M3** | Product — multi-select and copy, more shortcuts, export, unfiltered context | next |
-| **M4** | Public — English docs, bundled profiles, CI, notarised `.dmg` |  |
+| **M3** | Product — multi-select, copy, keyboard, unfiltered context, export | ✅ done |
+| **M4** | Public — English docs, bundled profiles, CI, notarised `.dmg` | next |
 
 Full product spec (in French): [`docs/PRD.fr.md`](docs/PRD.fr.md).
 
