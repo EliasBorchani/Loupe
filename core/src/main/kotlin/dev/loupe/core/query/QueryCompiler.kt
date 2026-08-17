@@ -171,34 +171,45 @@ class QueryCompiler(private val index: LogIndex, private val zone: ZoneId = Zone
 
     private fun resolveFacet(facetIndex: Int, token: QueryToken.Field, problems: MutableList<String>): FacetConstraint? {
         val dictionary = index.facetDictionaries[facetIndex]
+        val facetName: String = index.facets[facetIndex].name
+        val requested: List<String> = token.rawValue.split(',').filter { value -> value.isNotBlank() }
+        if (requested.isEmpty()) {
+            problems.add("'$facetName' needs a value")
+            return null
+        }
+
         val accepted = BooleanArray(dictionary.size)
         var matchedAny = false
 
-        token.rawValue.split(',').filter { value -> value.isNotBlank() }.forEach { rawValue ->
+        requested.forEach { rawValue ->
             val value: String = rawValue.trim().trim('"', '\'')
+            // Per value, not cumulative: `~a,~b` where only `a` matches has to report `b`.
+            var found = false
             if (value.startsWith(CONTAINS_PREFIX)) {
                 val needle: String = value.substring(1)
                 for (id in 0 until dictionary.size) {
                     if (dictionary.valueOf(id).contains(needle, ignoreCase = true)) {
                         accepted[id] = true
-                        matchedAny = true
-                    }
-                }
-                if (!matchedAny) problems.add("No ${index.facets[facetIndex].name} value contains '$needle'")
-            } else {
-                var found = false
-                for (id in 0 until dictionary.size) {
-                    if (dictionary.valueOf(id).equals(value, ignoreCase = true)) {
-                        accepted[id] = true
-                        matchedAny = true
                         found = true
                     }
                 }
-                if (!found) problems.add("No ${index.facets[facetIndex].name} value '$value' in this file")
+                if (!found) problems.add("No $facetName value contains '$needle'")
+            } else {
+                for (id in 0 until dictionary.size) {
+                    if (dictionary.valueOf(id).equals(value, ignoreCase = true)) {
+                        accepted[id] = true
+                        found = true
+                    }
+                }
+                if (!found) problems.add("No $facetName value '$value' in this file")
             }
+            if (found) matchedAny = true
         }
 
-        if (!matchedAny && problems.isNotEmpty()) return null
+        // Local, deliberately. This used to read `!matchedAny && problems.isNotEmpty()`, and
+        // `problems` is the whole query's list — so whether this term narrowed or was dropped
+        // depended on whether some *other* term had already failed.
+        if (!matchedAny) return null
 
         return if (token.negated) {
             FacetConstraint(BooleanArray(accepted.size) { id -> !accepted[id] }, acceptMissing = true)

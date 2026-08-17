@@ -176,6 +176,22 @@ class QueryCompilerTest {
     }
 
     @Test
+    fun `a term with no value means the same thing wherever it sits`() {
+        // Given / When — `problems` is the whole query's list, and resolveFacet consulted it to
+        // decide its own term. So `category:` selected nothing on its own, silently, and was dropped
+        // entirely after any earlier failure: one term, two meanings, decided by its neighbour.
+        val alone: CompiledQuery = compiler.compile("category:")
+        val afterAFailure: CompiledQuery = compiler.compile("level:Nope category:")
+
+        // Then — dropped and reported, both times. Dropping a failed term is the documented policy;
+        // doing it only sometimes was not.
+        assertTrue(alone.problems.any { problem -> problem.contains("'category' needs a value") }, alone.problems.toString())
+        assertTrue(afterAFailure.problems.any { problem -> problem.contains("'category' needs a value") }, afterAFailure.problems.toString())
+        assertEquals(CORPUS.size, select("category:").size)
+        assertEquals(CORPUS.size, select("level:Nope category:").size)
+    }
+
+    @Test
     fun `a value absent from this file is reported as such`() {
         // Given — a typo, not an empty result.
         val compiled: CompiledQuery = compiler.compile("category:Snyc")
