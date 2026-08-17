@@ -70,10 +70,7 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
 
             val loaded: MutableList<CompiledProfile> = mutableListOf()
             val problems: MutableList<String> = mutableListOf()
-            directory.listFiles()
-                .orEmpty()
-                .filter { file -> file.isFile && file.name.endsWith(PROFILE_EXTENSION) }
-                .sortedBy { file -> file.name }
+            profileFilesIn(directory)
                 .forEach { file ->
                     try {
                         loaded.add(CompiledProfile.load(file))
@@ -84,15 +81,11 @@ class ProfileRegistry(val profiles: List<CompiledProfile>) {
             return LoadedRegistry(ProfileRegistry(bundled.profiles + loaded), problems)
         }
 
-        /** Profiles the user dropped in a directory. Throws on the first bad one. */
-        fun fromDirectory(directory: File): ProfileRegistry {
-            val loaded: List<CompiledProfile> = directory.listFiles()
-                .orEmpty()
-                .filter { file -> file.isFile && file.name.endsWith(PROFILE_EXTENSION) }
-                .sortedBy { file -> file.name }
-                .map { file -> CompiledProfile.load(file) }
-            return ProfileRegistry(loaded)
-        }
+        /** Sorted by name, so a user's profiles load in the order they see them. */
+        private fun profileFilesIn(directory: File): List<File> = directory.listFiles()
+            .orEmpty()
+            .filter { file -> file.isFile && file.name.endsWith(PROFILE_EXTENSION) }
+            .sortedBy { file -> file.name }
     }
 
     operator fun plus(other: ProfileRegistry): ProfileRegistry = ProfileRegistry(profiles + other.profiles)
