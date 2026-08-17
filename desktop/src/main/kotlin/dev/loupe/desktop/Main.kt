@@ -38,6 +38,7 @@ import dev.loupe.core.source.OpenPhase
 import dev.loupe.desktop.state.LoupeState
 import dev.loupe.desktop.state.OpenStatus
 import dev.loupe.desktop.state.Results
+import dev.loupe.desktop.state.Selection
 import dev.loupe.desktop.state.ViewMode
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
@@ -95,7 +96,8 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
     val query: String by state.query.collectAsState()
     val results: Results? by state.results.collectAsState()
     val viewMode: ViewMode by state.viewMode.collectAsState()
-    val selectedEntry: Int? by state.selectedEntry.collectAsState()
+    val selection: Selection? by state.selection.collectAsState()
+    val notice: String? by state.notice.collectAsState()
     val expandedEntries: Set<Int> by state.expandedEntries.collectAsState()
 
     val dropTarget = remember {
@@ -129,9 +131,10 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
                 results = results,
                 query = query,
                 viewMode = viewMode,
-                selectedEntry = selectedEntry,
+                selection = selection,
+                notice = notice,
                 expandedEntries = expandedEntries,
-                onCopy = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(StringSelection(text))) } },
+                onCopyText = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(StringSelection(text))) } },
             )
         }
     }
@@ -144,11 +147,17 @@ private fun Loaded(
     results: Results?,
     query: String,
     viewMode: ViewMode,
-    selectedEntry: Int?,
+    selection: Selection?,
+    notice: String?,
     expandedEntries: Set<Int>,
-    onCopy: (String) -> Unit,
+    onCopyText: (String) -> Unit,
 ) {
     val catchingUp: Boolean = state.isCatchingUp(results)
+    val copySelection: () -> Unit = { state.copySelection()?.let(onCopyText) }
+    // The row the detail pane describes: the moving end of the selection.
+    val focusedEntry: Int? = results
+        ?.takeIf { current -> current.matchCount > 0 }
+        ?.let { current -> selection?.focus?.takeIf { focus -> focus in 0 until current.matchCount }?.let(current.matches::get) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         SourceHeader(
@@ -193,11 +202,14 @@ private fun Loaded(
                         source = source,
                         results = results,
                         viewMode = viewMode,
-                        selectedEntry = selectedEntry,
+                        selection = selection,
                         expandedEntries = expandedEntries,
-                        onSelect = state::select,
+                        onSelectAt = state::selectAt,
+                        onExtendTo = state::extendTo,
                         onToggleExpanded = state::toggleExpanded,
                         onMoveSelection = state::moveSelection,
+                        onSelectAll = state::selectAll,
+                        onCopy = copySelection,
                         modifier = Modifier.weight(1f),
                     )
                 } else {
@@ -208,13 +220,13 @@ private fun Loaded(
             }
         }
 
-        selectedEntry?.let { entry ->
+        focusedEntry?.let { entry ->
             Divider()
             DetailPane(
                 source = source,
                 entry = entry,
-                onClose = { state.select(null) },
-                onCopy = onCopy,
+                onClose = state::clearSelection,
+                onCopy = copySelection,
             )
         }
 
@@ -223,6 +235,8 @@ private fun Loaded(
             source = source,
             results = results,
             catchingUp = catchingUp,
+            selectionSize = selection?.size ?: 0,
+            notice = notice,
             viewMode = viewMode,
             onViewModeChange = state::setViewMode,
         )

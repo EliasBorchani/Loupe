@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -29,7 +30,11 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +43,7 @@ import dev.loupe.core.source.EntryRenderer
 import dev.loupe.core.source.LogSource
 import dev.loupe.core.source.RenderedEntry
 import dev.loupe.desktop.state.Results
+import dev.loupe.desktop.state.Selection
 import dev.loupe.desktop.state.ViewMode
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
@@ -62,21 +68,27 @@ private val FACET_WIDTH = 132.dp
  * Text is decoded per visible row, never in bulk: [LogIndex] stores byte ranges, and only the
  * forty-odd rows on screen are ever turned into strings.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LogList(
     source: LogSource,
     results: Results,
     viewMode: ViewMode,
-    selectedEntry: Int?,
+    selection: Selection?,
     expandedEntries: Set<Int>,
-    onSelect: (Int) -> Unit,
+    onSelectAt: (Int) -> Unit,
+    onExtendTo: (Int) -> Unit,
     onToggleExpanded: (Int) -> Unit,
-    onMoveSelection: (Int) -> Unit,
+    onMoveSelection: (delta: Int, extend: Boolean) -> Unit,
+    onSelectAll: () -> Unit,
+    onCopy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
     val listState = rememberLazyListState()
     val listFocus = remember { FocusRequester() }
+    // `clickable` reports that a click happened, not which modifiers were down. The window does.
+    val windowInfo = LocalWindowInfo.current
     val zone: ZoneId = remember { ZoneId.systemDefault() }
     val index: LogIndex = source.index
     val levelCount: Int = index.profile.levelCount
@@ -87,11 +99,10 @@ fun LogList(
     // container, which still sees the event as it bubbles up from the focused row.
     LaunchedEffect(source) { runCatching { listFocus.requestFocus() } }
 
-    // Follows the selection rather than driving it, so arrow keys and clicks scroll identically.
-    LaunchedEffect(selectedEntry, results) {
-        val entry: Int = selectedEntry ?: return@LaunchedEffect
-        val position: Int = results.positionOf(entry)
-        if (position >= 0) listState.keepInView(position)
+    // Follows the focus rather than driving it, so arrow keys and clicks scroll identically.
+    LaunchedEffect(selection?.focus, results) {
+        val focus: Int = selection?.focus ?: return@LaunchedEffect
+        if (focus in 0 until results.matchCount) listState.keepInView(focus)
     }
 
     Box(
@@ -104,9 +115,17 @@ fun LogList(
             // focus move. The Box wraps only the list, so a cursor in the query bar is untouched.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionDown -> onMoveSelection(1)
-                    Key.DirectionUp -> onMoveSelection(-1)
+                val page: Int = maxOf(1, listState.layoutInfo.visibleItemsInfo.size - 1)
+                when {
+                    event.isMetaPressed && event.key == Key.A -> onSelectAll()
+                    event.isMetaPressed && event.key == Key.C -> onCopy()
+                    event.key == Key.DirectionDown || event.key == Key.J -> onMoveSelection(1, event.isShiftPressed)
+                    event.key == Key.DirectionUp || event.key == Key.K -> onMoveSelection(-1, event.isShiftPressed)
+                    event.key == Key.PageDown -> onMoveSelection(page, event.isShiftPressed)
+                    event.key == Key.PageUp -> onMoveSelection(-page, event.isShiftPressed)
+                    // Home and End are a page move large enough to hit the end, which stops there.
+                    event.key == Key.MoveHome -> onMoveSelection(-results.matchCount, event.isShiftPressed)
+                    event.key == Key.MoveEnd -> onMoveSelection(results.matchCount, event.isShiftPressed)
                     // Anything else belongs to whoever asked for it — a swallowed key is worse
                     // than an unhandled one.
                     else -> return@onPreviewKeyEvent false
@@ -124,18 +143,24 @@ fun LogList(
                 val entry: Int = results.matches[position]
                 val rendered: RenderedEntry = remember(entry, source) { EntryRenderer.render(index, source.text, entry) }
                 val ordinal: Int = index.levels[entry].toInt()
-                val selected: Boolean = entry == selectedEntry
+                val selected: Boolean = selection != null && position in selection
+                val focused: Boolean = selection?.focus == position
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
                             when {
-                                selected -> colors.accentSoft
+                                // The focused row is the one the detail pane describes, so it reads
+                                // a shade stronger than the rest of the run.
+                                focused -> colors.accentSoft
+                                selected -> colors.accentSoft.copy(alpha = 0.55f)
                                 else -> colors.surfaceForLevel(ordinal, levelCount)
                             },
                         )
-                        .clickable { onSelect(entry) }
+                        .clickable {
+                            if (windowInfo.keyboardModifiers.isShiftPressed) onExtendTo(position) else onSelectAt(position)
+                        }
                         .padding(horizontal = Spacing.medium, vertical = 1.dp),
                 ) {
                     when (viewMode) {

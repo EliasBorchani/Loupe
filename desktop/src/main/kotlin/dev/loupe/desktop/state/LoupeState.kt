@@ -40,6 +40,32 @@ sealed interface OpenStatus {
 }
 
 /**
+ * A contiguous run of selected rows, held as **positions in the result** rather than entry indices.
+ *
+ * A range, not a set, because that is what the gestures produce: click, shift-click, extend with an
+ * arrow. And positions rather than entries because "everything between these two" means everything
+ * between them *in what is on screen* — with a filter active, the entries in the gap are not part
+ * of the selection and must not be copied.
+ *
+ * [anchor] is where the selection started and stays put; [focus] is the end that moves, and is the
+ * row the detail pane describes.
+ */
+class Selection(val anchor: Int, val focus: Int) {
+
+    val first: Int get() = minOf(anchor, focus)
+    val last: Int get() = maxOf(anchor, focus)
+    val size: Int get() = last - first + 1
+
+    operator fun contains(position: Int): Boolean = position in first..last
+
+    fun coercedTo(matchCount: Int): Selection? {
+        if (matchCount <= 0) return null
+        val limit: Int = matchCount - 1
+        return Selection(anchor.coerceIn(0, limit), focus.coerceIn(0, limit))
+    }
+}
+
+/**
  * What the screen shows for one query.
  *
  * Not a data class, on purpose: [matches] is an `IntArray` whose structural equality would compare
@@ -112,8 +138,12 @@ class LoupeState(private val scope: CoroutineScope) {
     private val _viewMode = MutableStateFlow(ViewMode.Columns)
     val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
 
-    private val _selectedEntry = MutableStateFlow<Int?>(null)
-    val selectedEntry: StateFlow<Int?> = _selectedEntry.asStateFlow()
+    private val _selection = MutableStateFlow<Selection?>(null)
+    val selection: StateFlow<Selection?> = _selection.asStateFlow()
+
+    /** Transient feedback for an action that has no visible result of its own — a copy, an export. */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
 
     private val _expandedEntries = MutableStateFlow<Set<Int>>(emptySet())
     val expandedEntries: StateFlow<Set<Int>> = _expandedEntries.asStateFlow()
@@ -142,7 +172,7 @@ class LoupeState(private val scope: CoroutineScope) {
         openJob?.cancel()
         openJob = scope.launch {
             _status.value = OpenStatus.Working(OpenPhase.Detecting, 0, 0)
-            _selectedEntry.value = null
+            _selection.value = null
             _expandedEntries.value = emptySet()
             try {
                 val opened: LogSource = withContext(Dispatchers.IO) {
@@ -174,35 +204,90 @@ class LoupeState(private val scope: CoroutineScope) {
 
     fun setQuery(query: String) {
         _query.value = query
-        _selectedEntry.value = null
+        // Positions mean nothing once the result changes under them.
+        _selection.value = null
+        _notice.value = null
     }
 
     fun setViewMode(mode: ViewMode) {
         _viewMode.value = mode
     }
 
-    fun select(entry: Int?) {
-        _selectedEntry.value = entry
+    /** A plain click: one row, and a new anchor. */
+    fun selectAt(position: Int) {
+        _selection.value = Selection(position, position)
+    }
+
+    /** Shift-click: keep the anchor, move the far end. With nothing selected, behaves like a click. */
+    fun extendTo(position: Int) {
+        val current: Selection? = _selection.value
+        _selection.value = if (current == null) Selection(position, position) else Selection(current.anchor, position)
+    }
+
+    fun clearSelection() {
+        _selection.value = null
+    }
+
+    fun selectAll() {
+        val matchCount: Int = results.value?.matchCount ?: return
+        if (matchCount > 0) _selection.value = Selection(0, matchCount - 1)
     }
 
     /**
-     * Moves the selection [delta] rows through the **result**, not through the index.
+     * Moves the focus [delta] rows through the **result**, not through the index.
      *
      * With nothing selected yet, a step down starts at the top and a step up at the bottom, so the
      * first arrow press always lands somewhere useful. At either end it stops rather than wrapping:
      * in a list of nine million, silently teleporting to the far end is never what was meant.
+     *
+     * @param extend keep the anchor where it is, so shift-arrow grows the selection.
      */
-    fun moveSelection(delta: Int) {
+    fun moveSelection(delta: Int, extend: Boolean = false) {
         val current: Results = results.value ?: return
         if (current.matchCount == 0) return
 
-        val position: Int = _selectedEntry.value?.let { entry -> current.positionOf(entry) } ?: -1
-        val next: Int = if (position < 0) {
-            if (delta > 0) 0 else current.matchCount - 1
-        } else {
-            (position + delta).coerceIn(0, current.matchCount - 1)
+        val existing: Selection? = _selection.value?.coercedTo(current.matchCount)
+        if (existing == null) {
+            val start: Int = if (delta > 0) 0 else current.matchCount - 1
+            _selection.value = Selection(start, start)
+            return
         }
-        _selectedEntry.value = current.matches[next]
+        val focus: Int = (existing.focus + delta).coerceIn(0, current.matchCount - 1)
+        _selection.value = if (extend) Selection(existing.anchor, focus) else Selection(focus, focus)
+    }
+
+    /**
+     * The selected entries' raw text, newline-joined, capped.
+     *
+     * Capped because select-all on nine million entries is gigabytes, and the clipboard is for
+     * pasting into a ticket. Export writes the whole thing. The cap is reported rather than applied
+     * silently — a truncated paste that says nothing is how a bug report ends up missing its cause.
+     *
+     * @param maxEntries seam for the test; defaults to [CLIPBOARD_MAX_ENTRIES].
+     * @return the text, or `null` when nothing is selected.
+     */
+    fun copySelection(maxEntries: Int = CLIPBOARD_MAX_ENTRIES): String? {
+        val source: LogSource = _source.value ?: return null
+        val current: Results = results.value ?: return null
+        val selection: Selection = _selection.value?.coercedTo(current.matchCount) ?: return null
+
+        val total: Int = selection.size
+        val taken: Int = minOf(total, maxEntries)
+        val text: String = (0 until taken).joinToString("\n") { offset ->
+            val entry: Int = current.matches[selection.first + offset]
+            source.text.decode(source.index.fileIdOf(entry), source.index.byteOffsets[entry], source.index.byteLengths[entry])
+        }
+
+        _notice.value = if (taken < total) {
+            "Copied $taken of $total entries — use Export for all of them"
+        } else {
+            "Copied $taken ${if (taken == 1) "entry" else "entries"}"
+        }
+        return text
+    }
+
+    fun clearNotice() {
+        _notice.value = null
     }
 
     fun toggleExpanded(entry: Int) {
@@ -266,6 +351,9 @@ class LoupeState(private val scope: CoroutineScope) {
 }
 
 const val LEVEL_FIELD: String = "level"
+
+/** Select-all on a nine-million-entry result is gigabytes; the clipboard is for a ticket. */
+const val CLIPBOARD_MAX_ENTRIES: Int = 20_000
 
 /** Enough buckets that a 700 px strip has more than one per pixel column. */
 const val TIMELINE_BUCKETS: Int = 900

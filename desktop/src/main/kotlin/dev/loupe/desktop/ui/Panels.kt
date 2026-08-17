@@ -520,7 +520,7 @@ fun DetailPane(
     source: LogSource,
     entry: Int,
     onClose: () -> Unit,
-    onCopy: (String) -> Unit,
+    onCopy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
@@ -543,7 +543,7 @@ fun DetailPane(
             BasicText(
                 text = "copy",
                 style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
-                modifier = Modifier.clickable { onCopy(raw) },
+                modifier = Modifier.clickable(onClick = onCopy),
             )
             BasicText(
                 text = "close",
@@ -609,6 +609,8 @@ fun StatusBar(
     source: LogSource,
     results: Results?,
     catchingUp: Boolean,
+    selectionSize: Int,
+    notice: String?,
     viewMode: ViewMode,
     onViewModeChange: (ViewMode) -> Unit,
     modifier: Modifier = Modifier,
@@ -644,7 +646,21 @@ fun StatusBar(
                 style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
             )
         }
+        if (selectionSize > 1) {
+            BasicText(
+                text = "${COUNT_FORMAT.format(selectionSize)} selected",
+                style = LoupeTheme.type.uiSmall.copy(color = colors.accentInk),
+            )
+        }
         Spacer(Modifier.weight(1f))
+        // A copy leaves no trace on screen, so it has to say so — especially when it was capped.
+        if (notice != null) {
+            BasicText(
+                text = notice,
+                style = LoupeTheme.type.uiSmall.copy(color = colors.accentInk),
+                modifier = Modifier.padding(end = Spacing.medium),
+            )
+        }
         ViewModeToggle(viewMode, onViewModeChange)
     }
 }

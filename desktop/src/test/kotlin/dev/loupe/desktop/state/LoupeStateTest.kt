@@ -214,51 +214,46 @@ class LoupeStateTest {
     @Test
     fun `arrows start at an end when nothing is selected`() = runBlocking {
         // Given
-        val source: LogSource = openFolder()
+        openFolder()
         awaitResults("")
 
         // When / Then — the first press always lands somewhere useful.
         state.moveSelection(1)
-        assertEquals("before-midnight", messageOf(source, requireNotNull(state.selectedEntry.value)))
+        assertEquals("before-midnight", focusedMessage())
 
-        state.select(null)
+        state.clearSelection()
         state.moveSelection(-1)
-        assertEquals("morning", messageOf(source, requireNotNull(state.selectedEntry.value)))
+        assertEquals("morning", focusedMessage())
     }
 
     @Test
     fun `arrows step through the result, not through the index`() = runBlocking {
         // Given — Sync matches entries 0, 1 and 4 of the merged stream; 2 and 3 are Wpp.
-        val source: LogSource = openFolder()
+        openFolder()
         state.setQuery("category:Sync")
         awaitResults("category:Sync")
-        state.select(entryWithMessage(source, "retry"))
+        state.selectAt(1)
 
         // When
         state.moveSelection(1)
 
         // Then — the next *match*, skipping the two entries the query excluded.
-        assertEquals("gave-up", messageOf(source, requireNotNull(state.selectedEntry.value)))
+        assertEquals("gave-up", focusedMessage())
     }
 
     @Test
     fun `arrows stop at the ends instead of wrapping`() = runBlocking {
         // Given — in a list of nine million, teleporting to the far end is never what was meant.
-        val source: LogSource = openFolder()
+        openFolder()
         awaitResults("")
-        state.select(entryWithMessage(source, "before-midnight"))
+        state.selectAt(0)
 
-        // When
+        // When / Then
         repeat(3) { state.moveSelection(-1) }
+        assertEquals("before-midnight", focusedMessage())
 
-        // Then
-        assertEquals("before-midnight", messageOf(source, requireNotNull(state.selectedEntry.value)))
-
-        // When
         repeat(20) { state.moveSelection(1) }
-
-        // Then
-        assertEquals("morning", messageOf(source, requireNotNull(state.selectedEntry.value)))
+        assertEquals("morning", focusedMessage())
     }
 
     @Test
@@ -272,7 +267,115 @@ class LoupeStateTest {
         state.moveSelection(1)
 
         // Then
-        assertEquals(null, state.selectedEntry.value)
+        assertEquals(null, state.selection.value)
+    }
+
+    @Test
+    fun `shift-click extends from the anchor, in either direction`() = runBlocking {
+        // Given
+        openFolder()
+        awaitResults("")
+        state.selectAt(3)
+
+        // When — extend upwards.
+        state.extendTo(1)
+
+        // Then — the anchor stays put and the run covers both ends.
+        val selection: Selection = requireNotNull(state.selection.value)
+        assertEquals(3, selection.anchor)
+        assertEquals(1, selection.focus)
+        assertEquals(listOf(1, 2, 3), (1..3).filter { position -> position in selection })
+
+        // When — extend the other way from the same anchor.
+        state.extendTo(5)
+
+        // Then
+        assertEquals(3, requireNotNull(state.selection.value).size)
+    }
+
+    @Test
+    fun `shift-arrow grows the run, a plain arrow collapses it`() = runBlocking {
+        // Given
+        openFolder()
+        awaitResults("")
+        state.selectAt(1)
+
+        // When
+        state.moveSelection(1, extend = true)
+        state.moveSelection(1, extend = true)
+
+        // Then
+        assertEquals(3, requireNotNull(state.selection.value).size)
+
+        // When
+        state.moveSelection(1, extend = false)
+
+        // Then — a plain arrow drops the run and starts a new one.
+        assertEquals(1, requireNotNull(state.selection.value).size)
+    }
+
+    @Test
+    fun `select-all covers the result, not the file`() = runBlocking {
+        // Given
+        openFolder()
+        state.setQuery("category:Sync")
+        awaitResults("category:Sync")
+
+        // When
+        state.selectAll()
+
+        // Then — three of the six entries.
+        assertEquals(3, requireNotNull(state.selection.value).size)
+    }
+
+    @Test
+    fun `copying a run over a filter skips the entries the query excluded`() = runBlocking {
+        // Given — Sync is entries 0, 1 and 4; the two Wpp entries sit in the gap.
+        openFolder()
+        state.setQuery("category:Sync")
+        awaitResults("category:Sync")
+        state.selectAll()
+
+        // When
+        val copied: String = requireNotNull(state.copySelection())
+
+        // Then — "between these two" means between them *on screen*.
+        assertEquals(3, copied.lines().count { line -> line.contains(" -> ") })
+        assertTrue(copied.contains("before-midnight"))
+        assertTrue(copied.contains("gave-up"))
+        assertFalse(copied.contains("midnight\n") && copied.contains("frame"))
+        assertFalse(copied.contains("-> frame"))
+    }
+
+    @Test
+    fun `copying carries an entry's continuation lines with it`() = runBlocking {
+        // Given — an entry is not a line; its stack trace comes along.
+        openFolder()
+        awaitResults("")
+        state.selectAt(requireNotNull(state.results.value).positionOf(entryWithMessage("gave-up")))
+
+        // When
+        val copied: String = requireNotNull(state.copySelection())
+
+        // Then
+        assertTrue(copied.contains("java.lang.IllegalStateException"), copied)
+    }
+
+    @Test
+    fun `a capped copy says so instead of truncating in silence`() = runBlocking {
+        // Given
+        openFolder()
+        awaitResults("")
+        state.selectAll()
+
+        // When
+        val copied: String = requireNotNull(state.copySelection(maxEntries = 2))
+
+        // Then — a truncated paste that says nothing is how a bug report loses its cause.
+        assertEquals(2, copied.lines().count { line -> line.contains(" -> ") })
+        val notice: String = requireNotNull(state.notice.value)
+        assertTrue(notice.contains("2 of 6"), notice)
+        assertTrue(notice.contains("Export"), notice)
     }
 
     @Test
@@ -317,8 +420,17 @@ class LoupeStateTest {
         assertTrue(failure.message.contains("~/.loupe/profiles/"), failure.message)
     }
 
-    private fun entryWithMessage(source: LogSource, message: String): Int =
-        (0 until source.index.entryCount).first { entry -> messageOf(source, entry) == message }
+    private fun entryWithMessage(message: String): Int {
+        val source: LogSource = requireNotNull(state.source.value)
+        return (0 until source.index.entryCount).first { entry -> messageOf(source, entry) == message }
+    }
+
+    /** The message of the row the detail pane would describe. */
+    private fun focusedMessage(): String {
+        val results: Results = requireNotNull(state.results.value)
+        val focus: Int = requireNotNull(state.selection.value).focus
+        return messageOf(requireNotNull(state.source.value), results.matches[focus])
+    }
 
     private fun messageOf(source: LogSource, entry: Int): String = source.text
         .decode(source.index.fileIdOf(entry), source.index.byteOffsets[entry], source.index.byteLengths[entry])

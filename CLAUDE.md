@@ -149,13 +149,16 @@ recognise, so it exercises the merge and the skip path.
 
 ## M3 scope, and known gaps
 
+**Accepted, not a gap:** `MappedText` maps a file in one go, so a single file is capped at 2 GiB.
+A HealthMate day file is tens of megabytes and the cap is a whole folder's worth of them; segmenting
+the mapping would add a boundary case to every read for a file nobody has. Revisit if one shows up.
+
 - **Multi-select and copy.** One click selects one entry, `↑`/`↓` move through the result. The
   click / `⇧`-click / `⌘A` model has to be hand-written: `SelectionContainer` over `LazyColumn` is
   unstable on Compose Desktop, and that risk was called in the PRD before any of this was written.
 - More shortcuts (`⌘F`, `⌘L`, `j`/`k`, `Page↑`/`Page↓` — `moveSelection` already does the work),
   export of the current filter, unfiltered ±N lines of context around the selected entry,
   horizontal scrolling of the list.
-- `MappedText` caps at 2 GiB per file — one mapping, no segmentation yet.
 - Section markers (`=== … ===`) are counted but do not become a `source` facet.
 - **One bundled profile.** `android-logcat`, `json-lines`, `syslog` and `generic-timestamped` are due
   at M4, and each will exercise the timestamp compiler's fallback path, which has one test today.
