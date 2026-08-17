@@ -30,7 +30,7 @@ compose.desktop {
             description = "A structured log viewer"
             copyright = "© 2026 Elias Borchani. MIT."
             macOS {
-                bundleID = "dev.loupe.desktop"
+                bundleID = "io.github.eborchani.loupe"
                 dockName = "Loupe"
             }
         }

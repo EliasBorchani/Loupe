@@ -8,7 +8,7 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0 – M3 done. M4 next.** 109 tests, `main`, no remote yet. Docs in `docs/` (French);
+**State: M0 – M4 done.** 121 tests, `main`, no remote yet. Docs in `docs/` (French);
 the code, README and profiles are English.
 
 ---
@@ -59,6 +59,15 @@ the KDoc at the site; this is the index.
   documented, because mixing them corrupts the slot table silently.
 - **The merge never sorts.** Each file is already ascending, so `IndexMerger` is a k-way merge over a
   binary heap. It remaps dictionary ids rather than re-interning.
+
+**Formats**
+- **A timestamp with no year assumes one, and says so.** logcat and syslog both write `MM-dd`. The
+  loader warns rather than inventing a date in silence, and `assume_year` overrides it.
+- **A captured group shorter than its layout skips the fields that do not fit.** An optional
+  `(?:\.\d{3})?` yields 19 characters instead of 23; reading the slot anyway pulls whatever follows
+  in the line and calls it a number.
+- **`generic-timestamped` has priority 0 and min_match 0.90.** Detection sorts by score and breaks
+  ties on priority, which is the only reason a catch-all can be shipped at all.
 
 **Semantics**
 - **`entry.continues` is exact; `entry.opens` is a *necessary condition only*.** The parse regex runs
@@ -126,7 +135,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 109 tests, all three modules
+./gradlew test                                   # 121 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg
 ./gradlew build                                  # must be warning-free
@@ -147,6 +156,7 @@ recognise, so it exercises the merge and the skip path.
 | `docs/m1-core.md` | The profile system, and the exact-vs-necessary predicate distinction. |
 | `docs/m2-ui.md` | The three UI forks, decided, and what the screen deliberately does not do. |
 | `docs/m3-product.md` | Selection, keyboard, context and export — and why the clipboard is capped. |
+| `docs/m4-public.md` | The four bundled profiles, the two bugs they found, and why there is no JSON one. |
 | `profiles/withings.logprofile.toml` | The reference profile, heavily commented — the format's spec. |
 
 ---
@@ -164,7 +174,10 @@ the mapping would add a boundary case to every read for a file nobody has. Revis
   export of the current filter, unfiltered ±N lines of context around the selected entry,
   horizontal scrolling of the list.
 - Section markers (`=== … ===`) are counted but do not become a `source` facet.
-- **One bundled profile.** `android-logcat`, `json-lines`, `syslog` and `generic-timestamped` are due
-  at M4, and each will exercise the timestamp compiler's fallback path, which has one test today.
-- Not yet decided: the Gradle group / bundle id (`dev.loupe` if the domain is taken, else
-  `io.github.<account>`), and Apple notarisation for a public `.dmg`.
+- **No JSON profile**, deliberately. A regex-driven one would work for a single key order and be
+  silently wrong for every other; JSON needs a field extractor, not an expression. Shipping one that
+  lies about three formats to read one is worse than shipping none.
+- **Apple notarisation.** Needs a Developer account, a Developer ID certificate and an
+  app-specific password. Until then the `.dmg` opens via right-click → Open. Conveyor is free for
+  open source and handles signing, notarisation and updates.
+- **Not pushed anywhere yet.** `main`, MIT, no remote.

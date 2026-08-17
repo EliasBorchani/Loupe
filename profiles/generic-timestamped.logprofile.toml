@@ -1,0 +1,46 @@
+#  The fallback: an ISO-ish timestamp, an optional level word, and the rest.
+#
+#      2026-06-02 10:00:01.001 ERROR  connection refused
+#      2026-06-02T10:00:01Z WARN retrying
+#      2026-06-02 10:00:01 something with no level at all
+#
+#  Priority 0 on purpose. It will happily match a HealthMate or logcat file too, but detection
+#  sorts by score first and breaks ties on priority — so a format that describes the file
+#  properly always wins, and this one only takes over when nothing else recognises anything.
+
+name        = "generic-timestamped"
+description = "Any line starting with an ISO-8601-ish timestamp"
+priority    = 0
+
+[detect]
+sample    = 200
+# Stricter than the others. A catch-all that matches four lines in five of something it does not
+# understand is worse than admitting it does not understand the file.
+min_match = 0.90
+
+[entry]
+opens     = '''^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}'''
+continues = '''^\s'''
+strip_continuation_indent = true
+
+[parse]
+# Milliseconds and the level are both optional, which is the point of a fallback. The trailing
+# zone marker is consumed but not used: without knowing the writer's intent, guessing a zone is
+# worse than declaring one.
+regex = '''^(?<ts>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{3})?)(?:Z|[+-]\d{2}:?\d{2})?\s+(?:\[?(?<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\]?\s+)?(?<message>.*)$'''
+
+[fields.ts]
+role = "timestamp"
+# Declared with the milliseconds even though the regex makes them optional: the reader skips any
+# field the captured group is too short to hold, so a line without them parses to the second
+# rather than reading whatever follows and calling it a number.
+format = "yyyy-MM-dd HH:mm:ss.SSS"
+zone   = "local"
+
+[fields.level]
+role   = "level"
+order  = ["TRACE", "DEBUG", "INFO", "WARN", "WARNING", "ERROR", "FATAL"]
+labels = { WARNING = "Warn (long form)" }
+
+[fields.message]
+role = "message"

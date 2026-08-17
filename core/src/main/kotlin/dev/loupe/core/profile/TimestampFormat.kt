@@ -4,6 +4,7 @@ import dev.loupe.core.parse.LocalTimestampResolver
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 
 /**
@@ -22,6 +23,9 @@ import java.time.temporal.ChronoField
 class TimestampFormat private constructor(
     val pattern: String,
     val isFastPath: Boolean,
+    /** True when the format carries no year and one had to be assumed — logcat and syslog do this. */
+    val assumesYear: Boolean,
+    private val assumedYear: Int,
     private val zone: ZoneId,
     private val slots: List<Slot>,
     private val fallbackFormatter: DateTimeFormatter?,
@@ -49,24 +53,60 @@ class TimestampFormat private constructor(
 
         /**
          * @param zoneSpec `local`, `utc`, or a zone id such as `Europe/Paris`.
+         * @param assumeYear the year to use when the format carries none — logcat's `MM-dd` and
+         *   syslog's `MMM d` both do. Defaults to the current one, which is what every other
+         *   logcat viewer assumes and the only guess available.
          */
-        fun compile(pattern: String, zoneSpec: String?): TimestampFormat {
+        fun compile(pattern: String, zoneSpec: String?, assumeYear: Int? = null): TimestampFormat {
             val zone: ZoneId = resolveZone(zoneSpec)
+            val year: Int = assumeYear ?: java.time.Year.now(zone).value
             val slots: List<Slot>? = compileFastPathSlots(pattern)
+            val hasYear: Boolean = slots?.any { slot -> slot.kind == SlotKind.Year }
+                ?: patternMentionsYear(pattern)
+
             return if (slots != null) {
-                TimestampFormat(pattern, isFastPath = true, zone = zone, slots = slots, fallbackFormatter = null)
+                TimestampFormat(
+                    pattern = pattern,
+                    isFastPath = true,
+                    assumesYear = !hasYear,
+                    assumedYear = year,
+                    zone = zone,
+                    slots = slots,
+                    fallbackFormatter = null,
+                )
             } else {
                 TimestampFormat(
                     pattern = pattern,
                     isFastPath = false,
+                    assumesYear = !hasYear,
+                    assumedYear = year,
                     zone = zone,
                     slots = emptyList(),
                     // Locale.ROOT, not the machine's: a log file is written by a program, so a
                     // named month in it is "Jul", never "juil." — and the reader's locale has no
                     // business deciding whether a file parses.
-                    fallbackFormatter = DateTimeFormatter.ofPattern(pattern, java.util.Locale.ROOT),
+                    //
+                    // parseDefaulting supplies the year a yearless format cannot: without it,
+                    // building a LocalDateTime from the parsed fields simply throws.
+                    fallbackFormatter = DateTimeFormatterBuilder()
+                        .appendPattern(pattern)
+                        .parseDefaulting(ChronoField.YEAR, year.toLong())
+                        .toFormatter(java.util.Locale.ROOT),
                 )
             }
+        }
+
+        /** `y` outside a quoted literal. Used only when the fast path declined the pattern. */
+        private fun patternMentionsYear(pattern: String): Boolean {
+            var index = 0
+            var quoted = false
+            while (index < pattern.length) {
+                val character: Char = pattern[index]
+                if (character == '\'') quoted = !quoted
+                else if (!quoted && character == 'y') return true
+                index++
+            }
+            return false
         }
 
         private fun resolveZone(zoneSpec: String?): ZoneId = when (zoneSpec?.lowercase()) {
@@ -116,8 +156,9 @@ class TimestampFormat private constructor(
                     }
                 }
             }
-            // A date with no time is fine; a pattern with neither is not a timestamp.
-            return slots.takeIf { compiled -> compiled.any { slot -> slot.kind == SlotKind.Year } }
+            // A yearless format is fine — logcat and syslog both write one — but a pattern with no
+            // numeric field at all is not a timestamp.
+            return slots.takeIf { compiled -> compiled.isNotEmpty() }
         }
 
         /** `'T'` → 3 pattern chars, 1 text char. `''` → an escaped quote: 2 and 1. */
@@ -142,14 +183,19 @@ class TimestampFormat private constructor(
     fun read(chars: CharSequence, offset: Int, end: Int, resolver: LocalTimestampResolver): Long {
         if (!isFastPath) return readWithFormatter(chars, offset, end)
 
-        var year = 1970
+        var year: Int = assumedYear
         var month = 1
         var day = 1
         var hour = 0
         var minute = 0
         var second = 0
         var milli = 0
+        val available: Int = end - offset
         slots.forEach { slot ->
+            // A group shorter than the layout is not corruption, it is an optional tail: a pattern
+            // with `(?:\.\d{3})?` captures 19 characters when the milliseconds are absent. Reading
+            // the slot anyway would pull whatever follows in the line and call it a number.
+            if (slot.offset + slot.width > available) return@forEach
             val value: Int = readDigits(chars, offset + slot.offset, slot.width)
             when (slot.kind) {
                 SlotKind.Year -> year = value

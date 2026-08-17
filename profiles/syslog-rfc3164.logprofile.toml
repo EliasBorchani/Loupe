@@ -1,0 +1,51 @@
+#  Classic BSD syslog (RFC 3164) — what /var/log/system.log and most appliances still write.
+#
+#      Oct 11 22:14:15 mymachine su[1234]: 'su root' failed for lonvick on /dev/pts/8
+#
+#  This profile is deliberately the awkward one. Its timestamp has a *named* month, a
+#  *space-padded* day and *no year*, so it is the only bundled format that takes the
+#  DateTimeFormatter fallback — which is exactly why it is worth shipping: it keeps that path
+#  honest instead of leaving it covered by a single unit test.
+
+name        = "syslog-rfc3164"
+description = "BSD syslog (RFC 3164)"
+priority    = 30
+
+[detect]
+filename  = '''\.log$|^(system|syslog|messages)(\.\d+)?$'''
+sample    = 200
+min_match = 0.80
+
+[entry]
+# Three letters, a space, then a day that may be space-padded. A positional pre-filter cannot
+# express "letter", so this one buys nothing and the loader says so — parse.regex decides alone.
+continues = '''^\s'''
+strip_continuation_indent = true
+
+[parse]
+# `[^:\[]+` stops the tag before either its optional [pid] or the colon, so both
+# `su[1234]: …` and `kernel: …` land the same way.
+regex = '''^(?<ts>[A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2}) (?<host>\S+) (?<tag>[^:\[]+)(?:\[\d+\])?: (?<message>.*)$'''
+
+[fields.ts]
+role   = "timestamp"
+# `ppd` is a padded day: `Oct  1` has two spaces, `Oct 11` one.
+format = "MMM ppd HH:mm:ss"
+zone   = "local"
+
+[fields.host]
+role  = "facet"
+label = "Host"
+facet = "always"
+
+[fields.tag]
+role  = "facet"
+label = "Process"
+facet = "auto"
+
+[fields.message]
+role = "message"
+
+# RFC 3164 has no level field at all — severity travels in the numeric priority, which is
+# usually stripped before the line reaches a file. The engine copes: with no level scale the
+# sidebar drops that group and `level>=…` reports that this format has none.

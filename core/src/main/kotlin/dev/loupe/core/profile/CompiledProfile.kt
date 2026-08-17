@@ -90,8 +90,14 @@ class CompiledProfile private constructor(
                     problems.add("[fields.$fieldName] has role = \"timestamp\" but no format")
                 } else {
                     try {
-                        val compiled = TimestampFormat.compile(format, field.zone)
+                        val compiled = TimestampFormat.compile(format, field.zone, field.assumeYear)
                         timestampFormat = compiled
+                        if (compiled.assumesYear) {
+                            warnings.add(
+                                "timestamp format '$format' carries no year, so one is assumed — set " +
+                                    "[fields.$fieldName] assume_year for an archived log from another year",
+                            )
+                        }
                         if (!compiled.isFastPath) {
                             warnings.add(
                                 "timestamp format '$format' falls back to DateTimeFormatter — expect roughly a " +

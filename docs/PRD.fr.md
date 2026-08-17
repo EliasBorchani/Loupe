@@ -5,7 +5,7 @@
 > Doc de travail en français. Le repo public (README, docs, profils) sera en anglais — traduction au M4.
 > Repo personnel, licence **MIT**, public dès le départ.
 >
-> **État : M0 à M3 terminés** — voir les docs `m0` à `m3`. Prochain jalon : M4 (publication).
+> **État : M0 à M4 terminés** — voir les docs `m0` à `m4`. Reste : la notarisation Apple, et pousser le dépôt.
 
 ---
 
@@ -231,7 +231,7 @@ Chiffres complets, protocole et pièges de mesure : [`m0-perf-spike.md`](m0-perf
 | ~~**M1 — Cœur**~~ **✅ fait** | Chargement de profil TOML, indexation, facettes, parseur de requête | **56 tests. Généricité complète pour +6 % (411 ns/entrée contre 386 au M0).** Le pré-filtre est désormais dérivé du profil → [`m1-core.md`](m1-core.md) |
 | ~~**M2 — UI utilisable**~~ **✅ fait** | Fenêtre, ouverture de dossier, liste virtualisée, sidebar de facettes, barre de requête | **Les trois arbitrages tranchés et implémentés ; timeline et panneau de détail livrés en avance sur le M3.** 86 tests → [`m2-ui.md`](m2-ui.md) |
 | ~~**M3 — Produit**~~ **✅ fait** | Timeline, panneau détail, export, thèmes, raccourcis, santé du parse | **Sélection multiple faite main, clavier complet, contexte non filtré, export non plafonné.** 103 tests → [`m3-product.md`](m3-product.md) |
-| **M4 — Public** | README anglais, doc du format de profil, 5 profils livrés, CI, licence, notarisation | Repo GitHub publié |
+| ~~**M4 — Public**~~ **✅ fait** | README anglais, doc du format de profil, profils livrés, CI, licence, notarisation | **4 profils (pas 5 : le JSON demande un extracteur, pas une regex), CI, identifiants.** Restent la notarisation et le push → [`m4-public.md`](m4-public.md) |
 
 ---
 

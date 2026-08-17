@@ -1,0 +1,61 @@
+#  Android logcat — the `threadtime` format, which is what `adb logcat` writes by default
+#  and what every bug report attaches.
+#
+#      06-02 10:00:01.001  1234  5678 D SyncService: pulling vasistas for user 42
+
+name        = "android-logcat"
+description = "Android logcat, -v threadtime"
+priority    = 40
+
+[detect]
+sample    = 200
+min_match = 0.80
+
+[entry]
+# Two digits, a dash, two digits, a space. Enough to reject a header line in a handful of
+# byte comparisons, which is all a pre-filter has to do.
+opens = '''^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} '''
+# No continuation rule, on purpose. logcat does not indent a wrapped line: a stack trace comes
+# through as separate lines each carrying the full prefix, so each frame *is* its own entry.
+# The loader warns that every line is tried against parse.regex; for this format that is true
+# and unavoidable.
+
+[parse]
+regex = '''^(?<ts>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?<pid>\d+)\s+(?<tid>\d+) (?<level>[VDIWEFS]) (?<tag>[^:]*?)\s*: (?<message>.*)$'''
+
+[fields.ts]
+role   = "timestamp"
+# logcat writes no year. One is assumed — the current one, which is what every other logcat
+# viewer does and the only guess available. Set assume_year for an archived capture.
+format = "MM-dd HH:mm:ss.SSS"
+zone   = "local"
+
+[fields.level]
+role   = "level"
+# Declaration order is severity order. Silent sits above Fatal because logcat's own scale does.
+order  = ["V", "D", "I", "W", "E", "F", "S"]
+labels = { V = "Verbose", D = "Debug", I = "Info", W = "Warn", E = "Error", F = "Fatal", S = "Silent" }
+
+[fields.tag]
+role  = "facet"
+label = "Tag"
+facet = "auto"
+
+[fields.pid]
+role  = "facet"
+label = "PID"
+facet = "auto"
+
+[fields.tid]
+role  = "facet"
+label = "TID"
+# Thread ids are numerous and rarely what you filter by; parsed, but kept out of the sidebar.
+facet = "never"
+
+[fields.message]
+role = "message"
+
+# `--------- beginning of main`, written by logcat itself when a buffer starts.
+[[markers]]
+regex = '''^-{5,} beginning of '''
+role  = "notice"

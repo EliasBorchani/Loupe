@@ -69,6 +69,11 @@ data class FieldSpec(
     val format: String? = null,
     /** [FieldRole.Timestamp] only — `local`, `utc`, or a zone id such as `Europe/Paris`. */
     val zone: String? = null,
+    /**
+     * [FieldRole.Timestamp] only — the year to assume when the format has none, as logcat's
+     * `MM-dd` and syslog's `MMM d` do. Defaults to the current year.
+     */
+    @SerialName("assume_year") val assumeYear: Int? = null,
     /** [FieldRole.Level] only — captured values in **ascending severity**. Enables `level>=W`. */
     val order: List<String>? = null,
     val labels: Map<String, String> = emptyMap(),

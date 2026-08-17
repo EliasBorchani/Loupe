@@ -24,8 +24,15 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
@@ -102,6 +109,8 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
     val showParseReport: Boolean by state.showParseReport.collectAsState()
     val expandedEntries: Set<Int> by state.expandedEntries.collectAsState()
 
+    val queryFocus = remember { FocusRequester() }
+
     val dropTarget = remember {
         object : DragAndDropTarget {
             /** A drop replaces what is open, as in any document app; "+ add…" is the other half. */
@@ -118,7 +127,15 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
         modifier = Modifier
             .fillMaxSize()
             .background(LoupeTheme.colors.ground)
-            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget),
+            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)
+            // Window-wide, because "find" has to work wherever you are. Only these two: everything
+            // else must reach the list, and a swallowed key is worse than an unhandled one.
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown || !event.isMetaPressed) return@onPreviewKeyEvent false
+                if (event.key != Key.F && event.key != Key.L) return@onPreviewKeyEvent false
+                runCatching { queryFocus.requestFocus() }
+                true
+            },
     ) {
         val current: LogSource? = source
         when {
@@ -137,6 +154,7 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
                 notice = notice,
                 showParseReport = showParseReport,
                 expandedEntries = expandedEntries,
+                queryFocus = queryFocus,
                 onCopyText = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(StringSelection(text))) } },
             )
         }
@@ -154,6 +172,7 @@ private fun Loaded(
     notice: String?,
     showParseReport: Boolean,
     expandedEntries: Set<Int>,
+    queryFocus: FocusRequester,
     onCopyText: (String) -> Unit,
 ) {
     val catchingUp: Boolean = state.isCatchingUp(results)
@@ -179,6 +198,7 @@ private fun Loaded(
             totalCount = source.index.entryCount,
             problems = results?.problems.orEmpty(),
             catchingUp = catchingUp,
+            focusRequester = queryFocus,
         )
         Divider()
 
