@@ -12,6 +12,7 @@ import dev.loupe.core.source.LogSource
 import dev.loupe.core.profile.ProfileRegistry
 import dev.loupe.core.source.LogSourceLoader
 import dev.loupe.core.source.OpenPhase
+import dev.loupe.desktop.format.Formatters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -125,7 +126,6 @@ class LoupeState(private val scope: CoroutineScope) {
         /** Long enough to skip the intermediate states of typing, short enough to feel immediate. */
         private const val QUERY_DEBOUNCE_MILLIS = 180L
 
-        private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
     }
 
     private val _source = MutableStateFlow<LogSource?>(null)
@@ -357,12 +357,11 @@ class LoupeState(private val scope: CoroutineScope) {
 
     /** A timeline brush writes `since:` / `until:`, so the bar always explains the picture. */
     fun setTimeWindow(sinceMillis: Long?, untilMillis: Long?) {
-        val zone: ZoneId = ZoneId.systemDefault()
         setQuery(
             QueryEdits.setTimeWindow(
                 query = _query.value,
-                since = sinceMillis?.let { millis -> TIME_FORMAT.format(Instant.ofEpochMilli(millis).atZone(zone)) },
-                until = untilMillis?.let { millis -> TIME_FORMAT.format(Instant.ofEpochMilli(millis).atZone(zone)) },
+                since = sinceMillis?.let { millis -> Formatters.querySecond(millis) },
+                until = untilMillis?.let { millis -> Formatters.querySecond(millis) },
             ),
         )
     }

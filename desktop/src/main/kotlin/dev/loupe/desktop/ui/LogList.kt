@@ -49,13 +49,11 @@ import dev.loupe.core.source.RenderedEntry
 import dev.loupe.desktop.state.Results
 import dev.loupe.desktop.state.Selection
 import dev.loupe.desktop.state.ViewMode
+import dev.loupe.desktop.format.Formatters
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
 private val TIME_WIDTH = 84.dp
 private val LEVEL_WIDTH = 16.dp
@@ -97,7 +95,6 @@ fun LogList(
     val sideways: ScrollState = rememberScrollState()
     // `clickable` reports that a click happened, not which modifiers were down. The window does.
     val windowInfo = LocalWindowInfo.current
-    val zone: ZoneId = remember { ZoneId.systemDefault() }
     val index: LogIndex = source.index
     val levelCount: Int = index.profile.levelCount
     val levelSymbols: List<String> = remember(index) { index.profile.levelDecoder?.order ?: emptyList() }
@@ -178,7 +175,6 @@ fun LogList(
                             ordinal = ordinal,
                             levelSymbols = levelSymbols,
                             rendered = rendered,
-                            zone = zone,
                             expanded = entry in expandedEntries,
                             onToggleExpanded = { onToggleExpanded(entry) },
                         )
@@ -257,7 +253,6 @@ private fun ColumnsRow(
     ordinal: Int,
     levelSymbols: List<String>,
     rendered: RenderedEntry,
-    zone: ZoneId,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
 ) {
@@ -267,7 +262,7 @@ private fun ColumnsRow(
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
         BasicText(
-            text = TIME_FORMAT.format(Instant.ofEpochMilli(index.timestamps[entry]).atZone(zone)),
+            text = Formatters.millisecond(index.timestamps[entry]),
             style = mono.copy(color = colors.inkTertiary),
             maxLines = 1,
             modifier = Modifier.width(TIME_WIDTH),

@@ -57,6 +57,22 @@ class LoupeColors(
         ordinal == levelCount - 2 -> warnSoft
         else -> Color.Transparent
     }
+
+    /**
+     * Timeline bar for a severity ordinal.
+     *
+     * The third of these, and it used to live in the timeline file taking its colours as arguments —
+     * so a change to the severity scale had to be made here and remembered there. The branches are
+     * the same shape on purpose: the top of the declared `order` is the error colour, the one below
+     * it the warning colour, and a profile chooses its colours by choosing its scale.
+     */
+    fun barForLevel(ordinal: Int, levelCount: Int): Color = when {
+        levelCount == 0 -> accent.copy(alpha = 0.55f)
+        ordinal == levelCount - 1 -> error
+        ordinal == levelCount - 2 -> warn
+        ordinal <= 1 -> accent.copy(alpha = 0.28f)
+        else -> accent.copy(alpha = 0.55f)
+    }
 }
 
 private val LIGHT = LoupeColors(

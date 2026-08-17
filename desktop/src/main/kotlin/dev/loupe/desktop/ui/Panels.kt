@@ -53,16 +53,11 @@ import dev.loupe.core.source.LogSource
 import dev.loupe.desktop.state.LEVEL_FIELD
 import dev.loupe.desktop.state.Results
 import dev.loupe.desktop.state.ViewMode
+import dev.loupe.desktop.format.Formatters
 import dev.loupe.desktop.theme.LoupeTheme
 import dev.loupe.desktop.theme.Spacing
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val COUNT_FORMAT: java.text.NumberFormat = java.text.NumberFormat.getIntegerInstance(Locale.getDefault())
-private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
 // ─── Query bar ───────────────────────────────────────────────────────────────────────────────
 
@@ -115,7 +110,7 @@ fun QueryBar(
                 )
             }
             BasicText(
-                text = "${COUNT_FORMAT.format(matchCount)} / ${COUNT_FORMAT.format(totalCount)}",
+                text = "${Formatters.count(matchCount)} / ${Formatters.count(totalCount)}",
                 style = LoupeTheme.type.mono.copy(color = if (catchingUp) colors.inkTertiary else colors.inkSecondary),
             )
         }
@@ -356,7 +351,7 @@ private fun FacetRow(
                 modifier = Modifier.weight(1f),
             )
             BasicText(
-                text = COUNT_FORMAT.format(count),
+                text = Formatters.count(count),
                 style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
                 maxLines = 1,
             )
@@ -386,7 +381,6 @@ fun TimelineStrip(
 ) {
     val colors = LoupeTheme.colors
     val index: LogIndex = source.index
-    val zone: ZoneId = remember { ZoneId.systemDefault() }
     val levelCount: Int = maxOf(index.profile.levelCount, 1)
     val span: Long = index.maxTimestampMillis - index.minTimestampMillis
 
@@ -479,7 +473,7 @@ fun TimelineStrip(
                     if (count == 0) continue
                     val height: Float = (count.toFloat() / peak) * size.height
                     drawRect(
-                        color = barColour(ordinal, levelCount, colors.error, colors.warn, colors.accent),
+                        color = colors.barForLevel(ordinal, levelCount),
                         topLeft = Offset(bucket * barWidth, size.height - drawn - height),
                         size = Size(maxOf(barWidth - 0.5f, 0.5f), height),
                     )
@@ -502,7 +496,7 @@ fun TimelineStrip(
             modifier = Modifier.fillMaxWidth().padding(start = Spacing.medium, end = Spacing.medium, bottom = Spacing.tiny),
         ) {
             BasicText(
-                text = CLOCK.format(Instant.ofEpochMilli(index.minTimestampMillis).atZone(zone)),
+                text = Formatters.minute(index.minTimestampMillis),
                 style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
             )
             Spacer(Modifier.weight(1f))
@@ -516,7 +510,7 @@ fun TimelineStrip(
             )
             Spacer(Modifier.weight(1f))
             BasicText(
-                text = CLOCK.format(Instant.ofEpochMilli(index.maxTimestampMillis).atZone(zone)),
+                text = Formatters.minute(index.maxTimestampMillis),
                 style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
             )
         }
@@ -524,13 +518,6 @@ fun TimelineStrip(
 }
 
 private const val MINIMUM_BRUSH_PIXELS = 4f
-
-private fun barColour(ordinal: Int, levelCount: Int, error: Color, warn: Color, accent: Color): Color = when {
-    ordinal == levelCount - 1 -> error
-    ordinal == levelCount - 2 -> warn
-    ordinal <= 1 -> accent.copy(alpha = 0.28f)
-    else -> accent.copy(alpha = 0.55f)
-}
 
 // ─── Detail pane ─────────────────────────────────────────────────────────────────────────────
 
@@ -551,7 +538,6 @@ fun DetailPane(
 ) {
     val colors = LoupeTheme.colors
     val index: LogIndex = source.index
-    val zone: ZoneId = remember { ZoneId.systemDefault() }
     val raw: String = remember(entry, source) { EntryRenderer.render(source, entry).raw }
     var showContext by remember(entry) { mutableStateOf(false) }
 
@@ -590,7 +576,7 @@ fun DetailPane(
             modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.small).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(Spacing.small),
         ) {
-            Field("time", STAMP.format(Instant.ofEpochMilli(index.timestamps[entry]).atZone(zone)))
+            Field("time", Formatters.full(index.timestamps[entry]))
             index.profile.levelDecoder?.let { decoder ->
                 val ordinal: Int = index.levels[entry].toInt()
                 Field("level", decoder.labels.getOrElse(ordinal) { "?" })
@@ -701,10 +687,10 @@ fun StatusBar(
         // so the indicator answers the question it raises rather than only posing it.
         BasicText(
             text = if (recognised >= 1.0) {
-                "✓ all ${COUNT_FORMAT.format(index.lineCount)} lines recognised"
+                "✓ all ${Formatters.count(index.lineCount)} lines recognised"
             } else {
-                "${COUNT_FORMAT.format(index.lineCount - index.unrecognisedLineCount)} / " +
-                    "${COUNT_FORMAT.format(index.lineCount)} lines recognised — why?"
+                "${Formatters.count(index.lineCount - index.unrecognisedLineCount)} / " +
+                    "${Formatters.count(index.lineCount)} lines recognised — why?"
             },
             style = LoupeTheme.type.uiSmall.copy(color = if (recognised >= 1.0) colors.accentInk else colors.warn),
             modifier = if (recognised >= 1.0 && !hasProfileProblems) {
@@ -721,7 +707,7 @@ fun StatusBar(
             )
         }
         BasicText(
-            text = "${COUNT_FORMAT.format(index.continuationLineCount)} folded",
+            text = "${Formatters.count(index.continuationLineCount)} folded",
             style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
         )
         if (results != null) {
@@ -732,7 +718,7 @@ fun StatusBar(
         }
         if (selectionSize > 1) {
             BasicText(
-                text = "${COUNT_FORMAT.format(selectionSize)} selected",
+                text = "${Formatters.count(selectionSize)} selected",
                 style = LoupeTheme.type.uiSmall.copy(color = colors.accentInk),
             )
         }
@@ -805,7 +791,7 @@ fun ParseReportPane(
             )
         }
         BasicText(
-            text = "${COUNT_FORMAT.format(report.total)} of ${COUNT_FORMAT.format(totalLines)} lines are neither " +
+            text = "${Formatters.count(report.total)} of ${Formatters.count(totalLines)} lines are neither " +
                 "an entry, a continuation, nor a declared marker — so nothing will ever find them.",
             style = LoupeTheme.type.uiSmall.copy(color = colors.inkSecondary),
             modifier = Modifier.padding(vertical = Spacing.small),
@@ -832,7 +818,7 @@ fun ParseReportPane(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.small),
                 ) {
                     BasicText(
-                        text = COUNT_FORMAT.format(report.countOf(kind)),
+                        text = Formatters.count(report.countOf(kind)),
                         style = LoupeTheme.type.monoSmall.copy(color = colors.warn, fontWeight = FontWeight.Bold),
                     )
                     Column {
@@ -893,7 +879,7 @@ fun SourceHeader(
             maxLines = 1,
         )
         BasicText(
-            text = "${COUNT_FORMAT.format(source.index.entryCount)} entries · ${source.elapsedMillis} ms",
+            text = "${Formatters.count(source.index.entryCount)} entries · ${source.elapsedMillis} ms",
             style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
         )
         Spacer(Modifier.weight(1f))
