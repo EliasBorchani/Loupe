@@ -178,6 +178,13 @@ Both CI systems are wired for it, and both call the **same** `tools/package-dmg.
 that each spell out the packaging drift, and the one nobody watches is the one that breaks on
 release day.
 
+**Neither captures the script's stdout, and that is deliberate.** Doing it once fed Gradle's entire
+log into `$GITHUB_OUTPUT`, which rejects a multi-line value — and only on a tag, so the first sight
+of it was a failed release. The script empties `build/release/` before writing, so the folder is a
+sufficient interface and nothing downstream can be poisoned by what some tool decides to print. The
+script still prints only the path on stdout, and its header says so; that is now a convenience for
+humans rather than something a release depends on.
+
 ### GitHub Actions
 
 `.github/workflows/release.yml` runs the tests, packages both architectures on a matrix of

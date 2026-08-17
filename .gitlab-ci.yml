@@ -87,7 +87,9 @@ package:dmg:
     - ./gradlew build
     # Signs and notarises if this machine has a Developer ID identity in ~/.gradle/gradle.properties,
     # builds unsigned otherwise. See docs/packaging.md.
-    - DMG=$(./tools/package-dmg.sh "${CI_COMMIT_TAG#v}")
+    # stdout is not captured: that once swallowed Gradle's whole log into a variable. The script
+    # empties build/release/ first, so the folder is the interface.
+    - ./tools/package-dmg.sh "${CI_COMMIT_TAG#v}"
     # The upload happens here, not in the release job: that one runs the release-cli image, which is
     # Alpine-based and ships no curl. macOS has curl built in.
     - |
@@ -106,7 +108,7 @@ package:dmg:
     - |
       {
         echo "PKG_VERSION=${CI_COMMIT_TAG#v}"
-        echo "DMG_NAME=$(basename "$DMG")"
+        echo "DMG_NAME=$(basename build/release/*.dmg)"
       } > build/release/release.env
   artifacts:
     expire_in: 30 days

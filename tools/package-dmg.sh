@@ -10,6 +10,11 @@
 #
 # This exists so GitHub Actions and GitLab CI run the *same* steps. Two CI files that each spell out
 # the packaging drift, and the one nobody watches is the one that breaks on release day.
+#
+# **stdout is the path to the .dmg, and nothing else.** Both CI systems read it with `DMG=$(…)`, and
+# GitHub feeds it straight into $GITHUB_OUTPUT, which rejects a multi-line value. Everything else —
+# progress, Gradle's own output, warnings — goes to stderr. Every command added below must either be
+# quiet, be captured, or be redirected with `>&2`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -70,10 +75,11 @@ GRADLE_PROPERTIES="${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
 if [ "${LOUPE_SIGN:-}" = "1" ] || grep -qs '^loupe\.signing\.identity=' "$GRADLE_PROPERTIES"; then
   echo "package-dmg.sh: signing identity configured — notarising" >&2
   NOTARISED=1
-  ./gradlew :desktop:notarizeDmg
+  # >&2 because stdout is reserved for the path. Gradle is chatty and would drown it.
+  ./gradlew :desktop:notarizeDmg >&2
 else
   echo "package-dmg.sh: no signing identity — building unsigned" >&2
-  ./gradlew :desktop:packageDmg
+  ./gradlew :desktop:packageDmg >&2
 fi
 
 SRC=$(find desktop/build/compose/binaries/main/dmg -name '*.dmg' | head -1)
