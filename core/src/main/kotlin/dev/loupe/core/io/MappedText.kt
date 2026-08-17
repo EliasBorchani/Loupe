@@ -16,8 +16,13 @@ import java.nio.file.StandardOpenOption
 class MappedText(file: File) : Closeable {
 
     companion object {
-        /** `FileChannel.map` is capped at `Integer.MAX_VALUE` bytes per mapping. */
-        private const val MAX_MAPPING_BYTES: Long = Int.MAX_VALUE.toLong()
+        /**
+         * `FileChannel.map` is capped at `Integer.MAX_VALUE` bytes per mapping.
+         *
+         * Public because the loader checks it up front: this class is built after indexing has
+         * already finished, so failing here means failing at the end of a minutes-long open.
+         */
+        const val MAX_MAPPING_BYTES: Long = Int.MAX_VALUE.toLong()
 
         private const val ASCII_UPPER_A = 'A'.code.toByte()
         private const val ASCII_UPPER_Z = 'Z'.code.toByte()
@@ -31,9 +36,14 @@ class MappedText(file: File) : Closeable {
 
     init {
         sizeBytes = channel.size()
-        // TODO(M1): segment the mapping so files above 2 GiB load. The M0 fixture is 1 GiB.
-        require(sizeBytes <= MAX_MAPPING_BYTES) {
-            "File is ${sizeBytes} bytes; mappings above $MAX_MAPPING_BYTES need segmenting (not yet implemented)"
+        // TODO: segment the mapping so files above 2 GiB load. Callers are expected to have refused
+        // the file long before here — LogSourceLoader does — so this is the backstop, not the
+        // diagnosis. The channel is closed by hand because a throw out of init never reaches close().
+        if (sizeBytes > MAX_MAPPING_BYTES) {
+            channel.close()
+            throw IllegalArgumentException(
+                "'${file.name}' is $sizeBytes bytes; mappings above $MAX_MAPPING_BYTES need segmenting (not yet implemented)",
+            )
         }
         mapping = channel.map(FileChannel.MapMode.READ_ONLY, 0, sizeBytes)
     }

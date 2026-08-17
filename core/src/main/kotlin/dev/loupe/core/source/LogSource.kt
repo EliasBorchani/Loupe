@@ -3,6 +3,7 @@ package dev.loupe.core.source
 import dev.loupe.core.index.IndexMerger
 import dev.loupe.core.index.LogIndex
 import dev.loupe.core.index.LogIndexer
+import dev.loupe.core.io.MappedText
 import dev.loupe.core.io.TextSources
 import dev.loupe.core.parse.ProfileEntryParser
 import dev.loupe.core.profile.CompiledProfile
@@ -82,8 +83,12 @@ object LogSourceLoader {
         val startedAt: Long = System.nanoTime()
         val candidates: List<File> = expand(paths)
         require(candidates.isNotEmpty()) { "No readable file in ${paths.joinToString { path -> path.name }}" }
+        refuseUnmappable(candidates)
 
         val prepared: Prepared = prepare(candidates, progress)
+        // Again, on what will actually be mapped: a conversion usually shrinks its input, but
+        // nothing guarantees it, and the size that matters is the one the mapping will see.
+        refuseUnmappable(prepared.files.map { file -> file.readable })
         val totalBytes: Long = prepared.files.sumOf { file -> file.readable.length() }
         progress?.report(OpenPhase.Detecting, 0, totalBytes)
 
@@ -170,7 +175,27 @@ object LogSourceLoader {
         return Prepared(files, converted, directory)
     }
 
-    /** Folders one level deep; hidden and empty files dropped, extensions never consulted. */
+    /**
+     * A file too large to memory-map, refused before anything expensive happens.
+     *
+     * [MappedText] is built at the very end of [open], after detection, conversion, indexing and
+     * merging — so without this the user waits through a full index of a 3 GiB file to be told it
+     * cannot be opened at all. Checked twice, on the way in and after conversion.
+     */
+    private fun refuseUnmappable(files: List<File>) {
+        val tooLarge: File = files.firstOrNull { file -> file.length() > MappedText.MAX_MAPPING_BYTES } ?: return
+        throw IllegalArgumentException(
+            "'${tooLarge.name}' is ${tooLarge.length()} bytes. Files above " +
+                "${MappedText.MAX_MAPPING_BYTES} cannot be memory-mapped in one piece yet — split it, " +
+                "or open the part you need.",
+        )
+    }
+
+    /**
+     * Folders **one level deep** — a nested folder is not descended into, and its files are not
+     * opened. Hidden and empty files are dropped, and an extension is never consulted: HealthMate
+     * day files are named `2026-06-02` with none at all.
+     */
     private fun expand(paths: List<File>): List<File> = paths.flatMap { path ->
         when {
             path.isDirectory -> path.listFiles().orEmpty().filter { file -> file.isFile }.sortedBy { file -> file.name }

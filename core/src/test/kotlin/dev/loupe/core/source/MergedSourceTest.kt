@@ -1,11 +1,14 @@
 package dev.loupe.core.source
 
 import dev.loupe.core.index.LogIndex
+import dev.loupe.core.io.MappedText
 import dev.loupe.core.query.CompiledQuery
 import dev.loupe.core.query.QueryCompiler
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -142,6 +145,23 @@ class MergedSourceTest {
         // When / Then — the message has to name a way forward, not just fail.
         val failure = assertThrows(NoMatchingProfileException::class.java) { LogSourceLoader.open(listOf(folder)) }
         assertTrue(failure.message!!.contains(".loupe/profiles"), failure.message)
+    }
+
+    @Test
+    fun `refuses a file too large to map before it tries to read it`() {
+        // Given — a sparse file, so 2 GiB costs no disk. It holds nothing a profile could match,
+        // which is what makes the assertion below meaningful.
+        val huge = File(folder, "2026-07-21")
+        java.io.RandomAccessFile(huge, "rw").use { handle -> handle.setLength(MappedText.MAX_MAPPING_BYTES + 1) }
+        assumeTrue(huge.length() > MappedText.MAX_MAPPING_BYTES, "the filesystem would not make a sparse file")
+
+        // When / Then — MappedText is built at the very end of open(), so without an up-front check
+        // this waits through a full index before failing. The *type* is the proof it happened early:
+        // had detection run, this would be a NoMatchingProfileException instead.
+        val failure = assertThrows(IllegalArgumentException::class.java) { LogSourceLoader.open(listOf(huge)) }
+        assertFalse(failure is NoMatchingProfileException, "refused at detection, not up front: ${failure.message}")
+        assertTrue(failure.message!!.contains("2026-07-21"), failure.message)
+        assertTrue(failure.message!!.contains("memory-mapped"), failure.message)
     }
 
     @Test
