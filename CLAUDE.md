@@ -8,8 +8,11 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0 – M4 done.** 127 tests, `main`, no remote yet. Docs in `docs/` (French);
-the code, README and profiles are English.
+**State: M0 – M4 done.** Pushed to `github.com/EliasBorchani/Loupe`, mirrored on a self-hosted
+GitLab. Everything is in English — code, profiles, README and `docs/`.
+
+Test counts are deliberately absent from this file and from the README: a number written beside
+`./gradlew test` is a claim about the present, and every one of them had rotted by several dozen.
 
 ---
 
@@ -186,7 +189,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 127 tests, all three modules
+./gradlew test                                   # core, desktop and spike
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg (63 MB, arm64 or x64 per host)
 ./gradlew build                                  # must be warning-free

@@ -1,144 +1,154 @@
-# M4 — La publication
+# M4 — publishing
 
-Trois profils supplémentaires, l'intégration continue, et les identifiants de publication.
-**121 tests.**
+Three more profiles, continuous integration, and the publishing identifiers.
 
 ---
 
-## Les profils, et ce qu'ils ont cassé
+## The profiles, and what they broke
 
-Chacun a été choisi pour exercer un chemin que le profil Withings ne touche pas. C'était le but
-annoncé au M1 — « le repli du compilateur de timestamp n'a qu'un test aujourd'hui » — et il a
-effectivement trouvé deux bugs.
+Each was picked to exercise a path the Withings profile never touches. That was the stated goal at M1
+— "the timestamp compiler's fallback has only one test today" — and it did find two bugs.
 
-| Profil | Priorité | Ce qu'il exerce |
+| Profile | Priority | What it exercises |
 |---|---:|---|
-| `withings-healthmate` | 50 | Groupe optionnel, continuations indentées, tags R8 |
-| `android-logcat` | 40 | **Horodatage sans année**, sept niveaux, aucune continuation |
-| `syslog-rfc3164` | 30 | **Mois nommé, jour cadré à l'espace, aucun niveau du tout** — le seul à prendre le repli `DateTimeFormatter` |
-| `generic-timestamped` | 0 | **Millisecondes optionnelles**, niveau optionnel, attrape-tout |
+| `withings-healthmate` | 50 | An optional group, indented continuations, R8 tags |
+| `android-logcat` | 40 | **A yearless timestamp**, seven levels, no continuations at all |
+| `syslog-rfc3164` | 30 | **A named month, a space-padded day, no level whatsoever** — the only one to take the `DateTimeFormatter` fallback |
+| `generic-timestamped` | 0 | **Optional milliseconds**, optional level, catch-all |
 
-### Bug 1 — l'année inventée n'existait pas
+> Two more shipped after M4 — `android-studio-logcat` and `json-lines` — and neither carries a
+> priority, because a profile an adapter writes for is named rather than detected. See
+> [`profiles.md`](profiles.md).
 
-`MM-dd HH:mm:ss.SSS` (logcat) et `MMM d HH:mm:ss` (syslog) ne portent pas d'année. Le chemin rapide
-l'exigeait, et le repli `DateTimeFormatter` aurait de toute façon échoué : on ne construit pas un
-`LocalDateTime` sans date complète.
+### Bug 1 — the invented year did not exist
 
-L'année est désormais **assumée** — l'année courante par défaut, ce que fait tout autre visualiseur
-de logcat et la seule supposition disponible — avec `assume_year` dans le profil pour une capture
-archivée. Et surtout, **le chargeur le dit** : `assumesYear` remonte un avertissement, parce qu'un
-outil qui invente une date sans le signaler ment.
+`MM-dd HH:mm:ss.SSS` (logcat) and `MMM d HH:mm:ss` (syslog) carry no year. The fast path demanded one,
+and the `DateTimeFormatter` fallback would have failed anyway: you cannot build a `LocalDateTime`
+without a complete date.
 
-Côté repli, `parseDefaulting(ChronoField.YEAR, …)` fournit ce que le motif ne porte pas.
+The year is now **assumed** — the current year by default, which is what every other logcat viewer does
+and the only guess available — with `assume_year` in the profile for an archived capture. And more to
+the point, **the loader says so**: `assumesYear` raises a warning, because a tool that invents a date
+without mentioning it is lying.
 
-### Bug 2 — un groupe plus court que sa mise en page lisait n'importe quoi
+On the fallback side, `parseDefaulting(ChronoField.YEAR, …)` supplies what the pattern does not carry.
 
-`generic-timestamped` a des millisecondes optionnelles : `(?:\.\d{3})?`. Le groupe capturé fait donc
-19 ou 23 caractères. Le lecteur rapide lit à des offsets fixes — il allait donc chercher les
-millisecondes à l'offset 20 d'un groupe qui s'arrête à 19, et **appelait nombre ce qui suivait dans
-la ligne**.
+### Bug 2 — a group shorter than its layout read whatever followed
 
-Un `slot.offset + slot.width > available` suffit à corriger : une queue absente laisse son champ à
-zéro au lieu de produire une valeur inventée. C'est exactement le genre de bug qui ne plante pas et
-donne des horodatages faux.
+`generic-timestamped` has optional milliseconds: `(?:\.\d{3})?`. So the captured group is 19 or 23
+characters. The fast reader reads at fixed offsets — it went looking for the milliseconds at offset 20
+of a group that stops at 19, and **called a number whatever came next in the line**.
 
-### Ce qui n'est pas livré, et pourquoi
+A `slot.offset + slot.width > available` check is enough: an absent tail leaves its field at zero
+instead of producing an invented value. Exactly the kind of bug that does not crash and gives you wrong
+timestamps.
 
-**`json-lines`.** Un profil JSON piloté par regex ne marcherait que pour un ordre de clés donné, et
-se tromperait silencieusement sur tous les autres — sans parler des objets imbriqués et des
-guillemets échappés. Un JSON correct demande un extracteur de champs, pas une expression régulière.
-Livrer un profil qui ment sur trois formats pour en lire un est pire que ne rien livrer : c'est
-reporté avec sa raison.
+### What was not shipped, and why
 
-### L'attrape-tout ne vole pas la détection
+**`json-lines`.** A regex-driven JSON profile would work for one key order and be silently wrong for
+every other — before you get to nested objects and escaped quotes. Correct JSON needs a field
+extractor, not a regular expression. Shipping a profile that lies about three formats to read one is
+worse than shipping none, so it was deferred with its reason.
 
-`generic-timestamped` reconnaît volontiers une ligne Withings ou logcat. La détection trie par
-score puis départage par **priorité**, donc un format qui décrit vraiment le fichier gagne toujours,
-et l'attrape-tout ne prend la main que si personne d'autre ne comprend rien. Son `min_match` est
-aussi plus strict (0,90) : un fallback qui reconnaît quatre lignes sur cinq d'un format qu'il ne
-comprend pas est pire que l'aveu d'ignorance.
+> It shipped later, and the reasoning above is why it is a **source adapter** rather than a profile:
+> the adapter decodes the JSON properly and renders text a profile can read. The escapes were the
+> deciding argument — 12 of 43 lines in a real iOS capture carry `\"`, `\/` or `\n`, and a captured
+> group hands them to the facet still escaped.
 
-Deux tests pinnent la propriété dans les deux sens.
+### The catch-all does not steal detection
+
+`generic-timestamped` will happily recognise a Withings or a logcat line. Detection sorts by score and
+breaks ties on **priority**, so a format that genuinely describes the file always wins, and the
+catch-all only takes over when nobody else understands anything. Its `min_match` is stricter too
+(0.90): a fallback that recognises four lines in five of a format it does not understand is worse than
+admitting ignorance.
+
+Two tests pin the property in both directions.
 
 ---
 
 ## `⌘F` / `⌘L`
 
-Le dernier raccourci du M3. Posé sur la racine de la fenêtre et non sur la liste, parce que
-« chercher » doit marcher d'où qu'on soit — et strictement limité à ces deux touches, pour que tout
-le reste atteigne la liste.
+The last shortcut from M3. Placed on the window's root rather than on the list, because "find" has to
+work from wherever you are — and strictly limited to those two keys, so everything else reaches the
+list.
 
 ---
 
-## Intégration continue
+## Continuous integration
 
-`.github/workflows/build.yml`, sur Linux : rien ici n'ouvre de fenêtre. L'état est testé sans
-Compose et les parseurs sont du Kotlin ordinaire ; la seule chose qui réclame vraiment un Mac est
-`packageDmg`, qui est une étape de release et pas de push.
+`.github/workflows/build.yml`, on Linux: nothing here opens a window. The state is tested without
+Compose and the parsers are plain Kotlin; the only thing that genuinely needs a Mac is `packageDmg`,
+which is a release step and not a per-push one.
 
-Le job **échoue sur un avertissement du compilateur**. Une dépréciation est une petite tâche
-maintenant et une migration plus tard ; autant qu'elle se voie tout de suite plutôt que de
-s'accumuler derrière un mur de bruit.
+The job **fails on a compiler warning**. A deprecation is a small task now and a migration later; it
+may as well be visible immediately instead of piling up behind a wall of noise.
 
----
-
-## Identifiants
-
-`group = "io.github.eliasborchani"`, bundle id `io.github.eliasborchani.loupe`. Une coordonnée
-`io.github.` ne demande rien d'autre que le compte GitHub, là où `dev.loupe` revendiquerait un
-domaine. Les paquets Kotlin restent `dev.loupe.*` — ce sont des noms, pas des revendications — et
-c'est une ligne à changer si `loupe.dev` est un jour acquis.
+> A GitLab configuration followed, for a self-hosted instance: Docker runners for build and test, a Mac
+> mini shell runner for packaging. Both call the same `tools/package-dmg.sh`. See
+> [`packaging.md`](packaging.md).
 
 ---
 
-## Les profils tiers étaient promis, pas branchés
+## Identifiers
 
-`ProfileRegistry.fromDirectory` existait depuis le M1 et **personne ne l'appelait**. Pire, le
-message d'erreur quand aucun profil ne reconnaît un fichier disait déjà « Add one to
-`~/.loupe/profiles/` and reopen » — il promettait une fonctionnalité inexistante.
+`group = "io.github.eliasborchani"`, bundle id `io.github.eliasborchani.loupe`. An `io.github.`
+coordinate asks for nothing but the GitHub account, where `dev.loupe` would claim a domain. The Kotlin
+packages stay `dev.loupe.*` — those are names, not claims — and it is one line to change if
+`loupe.dev` is ever acquired.
 
-C'est branché : `~/.loupe/profiles/*.logprofile.toml`, relu **à chaque ouverture** pour qu'écrire un
-profil ne demande pas de redémarrage — c'est tout le déroulé quand on en écrit un pour un format que
-personne n'a décrit.
+---
 
-Deux décisions de conception :
+## Third-party profiles were promised, not wired
 
-- **`core` ne lit jamais le répertoire personnel, l'app oui.** `LogSourceLoader` prend par défaut le
-  registre embarqué, et `LoupeState` lui passe `bundledPlusUser()`. Sinon chaque test dépendrait
-  silencieusement de ce qui traîne dans `~/.loupe/profiles` sur la machine qui l'exécute.
-- **Un profil cassé est signalé, jamais fatal.** Quelqu'un qui en écrit un a une erreur de syntaxe
-  une fois sur deux ; refuser d'ouvrir quoi que ce soit casserait exactement la tâche que la
-  fonctionnalité sert. Les échecs remontent dans le panneau de diagnostic, à côté des lignes non
-  reconnues — c'est le même « pourquoi ça ne marche pas ».
+`ProfileRegistry.fromDirectory` had existed since M1 and **nobody called it**. Worse, the error message
+when no profile recognises a file already said "Add one to `~/.loupe/profiles/` and reopen" — it
+promised a feature that did not exist.
 
-La documentation publique du format est dans [`profiles.md`](profiles.md).
+> `fromDirectory` was never called afterwards either: what got written was `bundledPlusUser`, which
+> collects failures instead of throwing on the first one. The dead function survived two more
+> milestones and has since been deleted.
 
-## L'icône
+It is wired now: `~/.loupe/profiles/*.logprofile.toml`, re-read **on every open** so that writing a
+profile does not need a restart — which is the whole workflow when writing one for a format nobody has
+described.
 
-`desktop/icon.svg` (détaillée) et `desktop/icon-small.svg` (16 et 32 px), assemblées en `.icns` par
+Two design decisions:
+
+- **`core` never reads the home directory; the app does.** `LogSourceLoader` defaults to the bundled
+  registry, and `LoupeState` passes it `bundledPlusUser()`. Otherwise every test would silently depend
+  on whatever happens to be sitting in `~/.loupe/profiles` on the machine running it.
+- **A broken profile is reported, never fatal.** Someone writing one has a syntax error half the time;
+  refusing to open anything would break exactly the task the feature serves. Failures surface in the
+  diagnostic pane beside the unrecognised lines — it is the same "why is this not working".
+
+The public documentation of the format is in [`profiles.md`](profiles.md).
+
+## The icon
+
+`desktop/icon.svg` (detailed) and `desktop/icon-small.svg` (16 and 32 px), assembled into an `.icns` by
 `tools/render-icon.sh`.
 
-Le concept est la thèse du produit en une image : hors de la loupe, un log est un mur de lignes
-indifférenciées ; dedans, les mêmes lignes se résolvent en colonnes, et **exactement deux** portent
-une couleur — parce que c'est la règle de l'app, où colorer tous les niveaux revient à n'en colorer
-aucun. **Pas de manche** : une loupe d'horloger n'en a pas, et c'est ce qui évite le glyphe de
-recherche générique que tout le monde utilise déjà.
+The concept is the product's thesis in one image: outside the lens a log is a wall of undifferentiated
+lines; inside it, the same lines resolve into columns, and **exactly two** carry colour — because that
+is the app's rule, where colouring every level is the same as colouring none. **No handle**: a
+watchmaker's loupe has none, and that is what avoids the generic search glyph everyone already uses.
 
-Deux dessins, parce que **le détaillé ne survit pas à 16 px** : la page derrière la loupe devient du
-bruit, la colonne de métadonnées fusionne avec le message, et l'ambre et le rouge se moyennent en
-boue. La variante ne garde que ce qui se lit à cette taille — trois barres, pas de page, et un
-cerclage à 8 % de la largeur au lieu de 4 % pour qu'il fasse encore plus d'un pixel.
+Two drawings, because **the detailed one does not survive 16 px**: the page behind the lens becomes
+noise, the metadata column merges into the message, and the amber and the red average into mud. The
+variant keeps only what reads at that size — three bars, no page, and a rim at 8 % of the width instead
+of 4 % so it is still more than one pixel.
 
-Rasterisation par Chrome headless faute de rasteriseur SVG installé, puis `sips` pour les
-réductions. Deux pièges, tous deux dans le script : Chrome pointé sur un `.svg` à dimensions
-intrinsèques **recadre** au lieu de mettre à l'échelle (d'où l'enrobage HTML), et il **plafonne**
-une fenêtre sous ~50 px (d'où le rendu unique en 1024 suivi de `sips`).
+Rasterised by headless Chrome, for want of an installed SVG rasteriser, then `sips` for the reductions.
+Two traps, both in the script: Chrome pointed at an `.svg` with intrinsic dimensions **crops** instead
+of scaling (hence the HTML wrapper), and it **clamps** a window below ~50 px (hence the single 1024
+render followed by `sips`).
 
-## La barre de menus
+## The menu bar
 
-`LoupeMenuBar.kt`. Avec `apple.laf.useScreenMenuBar`, elle atterrit en haut de l'écran, là où un
-utilisateur Mac la cherche — et surtout là où une fonction se **découvre** : l'export et l'ajout de
-profil existaient déjà, aucun des deux n'était trouvable sans qu'on vous le dise.
+`LoupeMenuBar.kt`. With `apple.laf.useScreenMenuBar` it lands at the top of the screen, where a Mac
+user looks for it — and, more importantly, where a feature gets **discovered**: export and adding a
+profile both already existed, and neither was findable without being told.
 
 | Menu | |
 |---|---|
@@ -146,36 +156,38 @@ profil existaient déjà, aucun des deux n'était trouvable sans qu'on vous le d
 | **View** | Columns ⌘1 · Raw Line ⌘2 · Find ⌘F · Unrecognised Lines… |
 | **Profiles** | Reveal Profiles Folder · New from Template ▸ · Reload Profiles and Reopen |
 
-**Il n'y a délibérément pas de menu Edit.** Un raccourci de menu est capté par le menu natif avant
-que la fenêtre ne voie la touche : mettre Copy sur ⌘C et Select All sur ⌘A là-haut casserait les
-deux à l'intérieur du champ de requête — on sélectionnerait des lignes de log en croyant
-sélectionner du texte. Ils restent des gestionnaires au niveau de la fenêtre, portés par la liste
-qui les possède.
+**There is deliberately no Edit menu.** A menu shortcut is caught by the native menu before the window
+ever sees the key: putting Copy on ⌘C and Select All on ⌘A up there would break both inside the query
+field — you would select log rows while believing you were selecting text. They stay window-level
+handlers, owned by the list that owns them.
 
-« New from Template » copie un profil livré plutôt que de créer un fichier vide : ils sont
-abondamment commentés, et la façon la plus rapide de décrire un format est d'en éditer un qui
-marche. La copie est renommée dans le fichier aussi, sinon l'original et elle répondent au même nom
-et la détection a deux candidats indiscernables.
+"New from Template" copies a bundled profile rather than creating an empty file: they are heavily
+commented, and the fastest way to describe a format is to edit one that works. The copy is renamed
+inside the file too, or the original and it answer to the same name and detection has two
+indistinguishable candidates.
 
-## Un lancement qui mentait
+## A launch that lied
 
-Le bloc `run { workingDir = rootProject.projectDir }` n'a **jamais** été committé : `tasks.named("run")`
-échoue à la configuration, parce que le plugin Compose enregistre sa tâche `run` après l'évaluation
-de ce fichier. Conséquence : `--args="spike/fixtures/folder"` se résolvait contre `desktop/`, ne
-pointait sur rien, et `main` filtrait le chemin inexistant **en silence** — l'app s'ouvrait vide,
-ce qui ressemble exactement à un lancement réussi.
+The `run { workingDir = rootProject.projectDir }` block was **never** committed: `tasks.named("run")`
+fails at configuration time, because the Compose plugin registers its `run` task after this file is
+evaluated. The consequence: `--args="spike/fixtures/folder"` resolved against `desktop/`, pointed at
+nothing, and `main` filtered the non-existent path **in silence** — the app opened empty, which looks
+exactly like a successful launch.
 
-Corrigé des deux côtés : `tasks.withType<JavaExec>().configureEach` ne dépend pas de l'ordre
-d'enregistrement, et un chemin inexistant est désormais **signalé sur stderr** au lieu d'être
-écarté. Une entrée invalide qui ne dit rien coûte plus cher qu'une qui échoue.
+Fixed on both sides: `tasks.withType<JavaExec>().configureEach` does not depend on registration order,
+and a non-existent path is now **reported on stderr** instead of dropped. An invalid input that says
+nothing costs more than one that fails.
 
-## Reste
+## Left over
 
-**La notarisation Apple.** Elle demande un compte Apple Developer, un certificat *Developer ID
-Application* et un mot de passe spécifique à l'application ; rien de tout cela ne peut être fait
-depuis ici. Sans elle, le `.dmg` s'ouvre après un clic droit → Ouvrir, ou un
-`xattr -d com.apple.quarantine`. [Conveyor](https://conveyor.hydraulic.dev) est gratuit pour
-l'open source et gère signature, notarisation et mises à jour — c'est le chemin le plus court quand
-le moment viendra.
+**Apple notarisation.** It needs an Apple Developer account, a *Developer ID Application* certificate
+and an app-specific password. Without it the `.dmg` opens after a right-click → Open, or an
+`xattr -d com.apple.quarantine`.
 
-**Pousser sur GitHub.** Le dépôt est prêt, MIT, `main`, aucun remote.
+> The build is wired for it now — `signing.sign` turns on when `loupe.signing.identity` is present —
+> and a self-hosted Mac runner is where it is easiest, because the certificate lives in a login
+> keychain and no secret reaches the repository. See [`packaging.md`](packaging.md).
+> [Conveyor](https://conveyor.hydraulic.dev) remains the shorter road if the keychain turns into an
+> afternoon.
+
+**Pushing to GitHub.** *(Done — `github.com/EliasBorchani/Loupe`, plus a self-hosted GitLab mirror.)*

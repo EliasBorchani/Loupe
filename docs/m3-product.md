@@ -1,104 +1,102 @@
-# M3 — Le produit
+# M3 — the product
 
-Ce qui manquait pour que l'outil se pilote au lieu de se consulter : sélectionner plusieurs lignes,
-les copier, se déplacer au clavier, voir ce qui entourait une ligne, et sortir le résultat.
+What was missing for the tool to be driven rather than consulted: selecting several lines, copying
+them, moving by keyboard, seeing what surrounded a line, and getting the result out.
 
-**103 tests.** Rien de neuf côté performance — tout le M3 est de l'interaction.
+Nothing new on performance — all of M3 is interaction.
 
 ---
 
-## La sélection, écrite à la main
+## Selection, hand-written
 
-`SelectionContainer` sur `LazyColumn` est instable sur Compose Desktop. Le risque était identifié
-avant la première ligne de code, il n'a pas bougé, donc le modèle est fait main.
+`SelectionContainer` over `LazyColumn` is unstable on Compose Desktop. The risk was called before the
+first line of code was written, it has not moved, so the model is hand-made.
 
-**C'est une plage, pas un ensemble**, parce que c'est ce que produisent les gestes : clic,
-`⇧`+clic, extension à la flèche. Et elle est tenue en **positions dans le résultat, pas en index
-d'entrées** — c'est la partie qui compte. « Tout ce qui est entre ces deux-là » veut dire tout ce
-qui est entre eux *à l'écran* : avec `category:Sync` actif, les entrées Wpp qui dorment dans
-l'intervalle ne sont pas sélectionnées et ne doivent pas être copiées. C'est le test.
+**It is a range, not a set**, because that is what the gestures produce: click, `⇧`-click, extend with
+an arrow. And it is held in **positions within the result, not entry indices** — that is the part that
+matters. "Everything between these two" means everything between them *on screen*: with
+`category:Sync` active, the Wpp entries asleep in the interval are not selected and must not be
+copied. That is the test.
 
-L'ancre reste où la sélection a commencé, le focus est l'extrémité qui bouge et la ligne que décrit
-le panneau de détail. Cette ligne se lit un ton plus fort que le reste de la plage, pour qu'une
-longue sélection dise quand même où on en est.
+The anchor stays where the selection began; the focus is the end that moves, and the row the detail
+pane describes. That row reads one shade stronger than the rest of the range, so a long selection
+still says where you are in it.
 
-## Le clavier
+## The keyboard
 
-Tout passe par le gestionnaire `onPreviewKeyEvent` de la liste, dont le `Box` n'enveloppe pas la
-barre de requête — un curseur dans le champ de texte n'est jamais touché.
+Everything goes through the list's `onPreviewKeyEvent` handler, whose `Box` does not wrap the query
+bar — a cursor in the text field is never touched.
 
 | | |
 |---|---|
-| `↑` `↓` `j` `k` | déplacer d'une ligne |
-| `⇧` + n'importe lequel | étendre au lieu de déplacer |
-| `Page↑` `Page↓` | d'un écran, calculé sur les lignes réellement visibles |
-| `Début` `Fin` | aux extrémités du résultat |
-| `⌘A` | sélectionner le résultat — pas le fichier |
-| `⌘C` | copier |
+| `↑` `↓` `j` `k` | move one row |
+| `⇧` + any of them | extend instead of move |
+| `Page↑` `Page↓` | one screen, computed from the rows actually visible |
+| `Home` `End` | to the ends of the result |
+| `⌘A` | select the result — not the file |
+| `⌘C` | copy |
 
-## La copie est plafonnée, et le dit
+## The clipboard is capped, and says so
 
-À 20 000 entrées. Un `⌘A` sur neuf millions, c'est des gigaoctets, et le presse-papier sert à coller
-dans un ticket — le fichier, c'est l'export. **Le plafond est annoncé, jamais appliqué en
-silence** : un copier-coller tronqué qui ne dit rien, c'est un rapport de bug qui perd sa cause.
+At 20,000 entries. A `⌘A` over nine million is gigabytes, and the clipboard is for pasting into a
+ticket — the file is what export is for. **The cap is reported, never applied in silence**: a truncated
+paste that says nothing is how a bug report loses its cause.
 
-Le plafond est un paramètre par défaut, pour que le test l'exerce à 2 plutôt qu'en générant vingt
-mille lignes de fixture.
+The cap is a default parameter, so the test can exercise it at 2 rather than by generating twenty
+thousand lines of fixture.
 
-## Le contexte non filtré
+## Unfiltered context
 
-L'étape 6 du scénario nominal. Ce qui s'est passé autour d'une ligne est en général la raison
-pour laquelle elle s'est passée, et le filtre l'a par définition caché. La bascule `context ±20` du
-panneau de détail lit **l'index, pas le résultat** : avec `level:E` à l'écran, c'est là que sont les
-lignes Debug qui ont mené à l'erreur.
+What happened around a line is usually why it happened, and the filter has by definition hidden it.
+The detail pane's `context ±20` toggle reads **the index, not the result**: with `level:E` on screen,
+that is where the Debug lines that led to the error are.
 
-## L'export
+## Export
 
-Écrit **le résultat courant**, pas la sélection — c'est ce que dit le bouton, et restreindre
-davantage est le travail de la barre de requête. Non plafonné, hors thread UI, décodé entrée par
-entrée directement dans le writer : le pic mémoire est d'une entrée, pas du résultat.
+Writes **the current result**, not the selection — that is what the button says, and narrowing further
+is the query bar's job. Uncapped, off the UI thread, decoded entry by entry straight into the writer:
+the peak cost is one entry rather than the result.
 
-## Le défilement horizontal, en mode ligne brute seulement
+## Horizontal scrolling, in raw-line mode only
 
-Pas un compromis, une décision. En colonnes, faire défiler sur le côté pousserait les horodatages
-hors de l'écran et détruirait l'alignement qui est la raison d'être des colonnes ; là, une ligne est
-tronquée et le panneau de détail montre le reste. En ligne brute, où l'on veut le fichier tel quel,
-le défilement est exactement ce qu'il faut.
+Not a compromise, a decision. In columns, scrolling sideways would push the timestamps off screen and
+destroy the alignment that is the whole point of columns; there, a line is truncated and the detail
+pane shows the rest. In raw-line mode, where you want the file as it is, scrolling is exactly right.
 
-Il est posé sur la `Row` du contenu et non sur l'item, pour que la surbrillance de sélection couvre
-toujours la largeur visible pendant que le texte glisse à l'intérieur. Le `weight(1f)` a disparu
-avec : dans un défilement horizontal la largeur est non bornée, et un poids a besoin d'une borne.
+It sits on the content `Row` rather than on the item, so the selection highlight always covers the
+visible width while the text slides inside it. The `weight(1f)` went with it: inside a horizontal
+scroll the width is unbounded, and a weight needs a bound.
 
-## L'indicateur de santé répond à sa propre question
+## The health indicator answers its own question
 
-`40 168 / 41 087 lignes reconnues` disait qu'il y avait un problème sans dire lequel — ce qui est la
-moitié du travail. Le compteur est maintenant **cliquable** et ouvre un panneau qui groupe les
-lignes orphelines **par forme**, avec un exemple de chacune et sa position.
+`40,168 / 41,087 lines recognised` said there was a problem without saying what it was — which is half
+the work. The counter is now **clickable** and opens a pane grouping the orphaned lines **by shape**,
+with one example of each and its position.
 
-Le nombre dit que le profil est imparfait ; la forme dit *quelle partie* l'est, et les quatre
-pointent vers des correctifs très différents :
+The number says the profile is imperfect; the shape says *which part* of it is, and the five point at
+very different fixes:
 
-| Forme | Ce que ça veut dire |
+| Shape | What it means |
 |---|---|
-| ligne vide | Bénin. Écriture partielle, ou un second producteur sur le même fichier. |
-| espaces seulement | `entry.continues` est proche mais pas exact — vérifier la largeur d'indentation réelle. |
-| indentée, mais pas une continuation | Ressemble à un message replié ou une frame. `entry.continues` est probablement trop strict : un writer plus ancien avec un horodatage de largeur différente indente d'autant moins. |
-| **ressemble à une entrée, mais `parse.regex` la rejette** | **Celle qui vaut le détour.** Le pré-filtre a dit oui et la regex complète a dit non : le format a une forme que le profil ne décrit pas. |
-| autre chose | Écrite par un tout autre chemin de code. |
+| empty line | Benign. A partial write, or a second producer on the same file. |
+| whitespace only | `entry.continues` is close but not exact — check the real indent width. |
+| indented, but not a continuation | Looks like a folded message or a frame. `entry.continues` is probably too strict: an older writer with a different timestamp width indents by that much less. |
+| **looks like an entry, but `parse.regex` rejects it** | **The one worth the trip.** The pre-filter said yes and the full regex said no: the format has a shape the profile does not describe. |
+| something else | Written by an entirely different code path. |
 
-Compté **en entier**, échantillonné **par forme**. En entier parce qu'un ratio approximatif ne vaut
-rien ; échantillonné parce qu'un fichier ouvert avec le mauvais profil a *toutes* ses lignes
-orphelines, et retenir neuf millions de chaînes pour le dire transformerait un diagnostic en
-`OutOfMemoryError`. Le plafond est **par forme et non global** : une forme domine presque toujours,
-et un plafond global la laisserait écraser l'unique exemple de celle qui explique le problème.
+Counted **in full**, sampled **per shape**. In full because an approximate ratio is worth nothing;
+sampled because a file opened with the wrong profile has *every* line orphaned, and holding nine
+million strings to say so would turn a diagnosis into an `OutOfMemoryError`. The cap is **per shape and
+not global**: one shape almost always dominates, and a global cap would let it crowd out the single
+example of the one that explains the problem.
 
-L'outil sait donc diagnostiquer son propre profil — ce qui compte d'autant plus qu'on va en écrire
-quatre autres au M4.
+So the tool can diagnose its own profile — which matters all the more with four more about to be
+written in M4.
 
 ---
 
-## Reste pour le M4
+## Left for M4
 
-`⌘F` / `⌘L` pour le focus de la barre de requête. Les profils `android-logcat`, `json-lines`,
-`syslog`, `generic-timestamped` — chacun exercera le chemin de repli du compilateur de timestamp,
-qui n'a qu'un seul test aujourd'hui. Et la publication : group Gradle, notarisation, README.
+`⌘F` / `⌘L` to focus the query bar. The `android-logcat`, `json-lines`, `syslog` and
+`generic-timestamped` profiles — each of which will exercise the timestamp compiler's fallback path,
+which has only one test today. And publishing: the Gradle group, notarisation, a README.

@@ -1,135 +1,131 @@
-# M1 — Le cœur générique
+# M1 — the generic core
 
-**Verdict : le moteur est réellement piloté par les profils, et la généricité coûte 6 %.**
+**Verdict: the engine is genuinely profile-driven, and genericity costs 6 %.**
 
-Le M0 avait répondu « oui » avec un parseur codé en dur pour le format Withings. Le M1 remplace
-ce parseur par un moteur qui ne connaît aucun format : tout vient d'un `*.logprofile.toml`.
+M0 answered "yes" with a parser hardcoded for the Withings format. M1 replaces that parser with an
+engine that knows no format at all: everything comes from a `*.logprofile.toml`.
 
 ---
 
-## Ce qui est livré
+## What shipped
 
-| Brique | Fichier | Rôle |
+| Piece | File | Role |
 |---|---|---|
-| Spec de profil | `profile/LogProfileSpec.kt` | Le TOML tel qu'écrit, désérialisé, rien de compilé |
-| Compilation + validation | `profile/CompiledProfile.kt` | Regex compilée, numéros de groupes, échelle de niveaux, prédicats. **Rapporte tous les problèmes d'un coup**, pas le premier |
-| Numérotation des groupes | `profile/NamedGroups.kt` | `Matcher.start("nom")` re-résout le nom à chaque appel ; `Pattern.namedGroups()` n'existe qu'en Java 20. On scanne donc la source |
-| Timestamps | `profile/TimestampFormat.kt` | Compile un motif à largeur fixe en offsets, avec repli `DateTimeFormatter` |
-| Prédicats de ligne | `profile/LinePredicate.kt` | Le pré-filtre du M0, dérivé du profil au lieu d'être écrit à la main |
-| Échelle de niveaux | `profile/LevelDecoder.kt` | L'ordre déclaré **est** la sévérité ; c'est ce qui rend `level>=W` exprimable |
-| Auto-détection | `profile/ProfileRegistry.kt` | Score par échantillon, jamais un choix silencieux |
-| Parseur générique | `parse/ProfileEntryParser.kt` | Remplace la stratégie A du M0 |
-| Index générique | `index/LogIndex.kt` | N colonnes de facettes déclarées, plus « catégorie + tag » en dur |
-| Langage de requête | `query/QueryLexer.kt`, `query/QueryCompiler.kt` | La grammaire de la barre de requête → `EntryFilter` |
+| Profile spec | `profile/LogProfileSpec.kt` | The TOML as written, deserialised, nothing compiled |
+| Compilation + validation | `profile/CompiledProfile.kt` | Compiled regex, group numbers, level scale, predicates. **Reports every problem at once**, not the first |
+| Group numbering | `profile/NamedGroups.kt` | `Matcher.start("name")` re-resolves the name on every call, and `Pattern.namedGroups()` only exists from Java 20. So the source is scanned |
+| Timestamps | `profile/TimestampFormat.kt` | Compiles a fixed-width pattern into offsets, with a `DateTimeFormatter` fallback |
+| Line predicates | `profile/LinePredicate.kt` | M0's pre-filter, derived from the profile instead of hand-written |
+| Level scale | `profile/LevelDecoder.kt` | The declared order **is** severity, which is what makes `level>=W` expressible |
+| Auto-detection | `profile/ProfileRegistry.kt` | Scored on a sample, never a silent choice |
+| Generic parser | `parse/ProfileEntryParser.kt` | Replaces M0's strategy A |
+| Generic index | `index/LogIndex.kt` | N declared facet columns, rather than "category + tag" hardcoded |
+| Query language | `query/QueryLexer.kt`, `query/QueryCompiler.kt` | The query bar's grammar → `EntryFilter` |
 
-**56 tests**, dont chaque cas du format Withings rejoué contre les deux parseurs.
-
----
-
-## La distinction qui fait marcher le pré-filtre générique
-
-Le M0 avait établi que rejeter les lignes de continuation avant la regex est le levier principal
-(18,6 % des lignes). Restait à le dériver d'un profil plutôt que de l'écrire à la main.
-
-La première tentative a échoué de façon instructive : `entry.opens`
-(`^\d{4}-\d{2}-\d{2} …`) ne se réduit pas à un préfixe littéral, donc il retombait sur « exécuter
-la regex » — ce qui allouait une `String` par ligne **avant** que le parseur n'en alloue une
-seconde. Strictement pire que pas de pré-filtre du tout. Le test de compilation du profil l'a
-signalé immédiatement, en refusant un profil qui produisait un avertissement.
-
-Le déblocage tient à une distinction que le code rend maintenant explicite :
-
-- **`entry.continues` est sémantique.** Sa réponse décide si une ligne rejoint l'entrée du dessus
-  ou tente d'en ouvrir une. Il doit signifier *exactement* ce que dit sa regex → `compileExact`,
-  qui produit un préfixe littéral ou, à défaut, exécute la regex (avec avertissement).
-- **`entry.opens` n'est qu'une optimisation.** La vraie regex passe juste après et tranche. Il
-  suffit donc que ce soit une **condition nécessaire** : il peut accepter des lignes qui ne
-  parseront pas, il ne doit jamais en rejeter une qui aurait parsé → `compileNecessary`, qui
-  dérive des contraintes positionnelles (« position 0 est un chiffre, position 4 est un tiret… »)
-  et s'arrête au premier motif qu'il ne comprend pas, en gardant ce qu'il a. Un préfixe partiel
-  reste une condition nécessaire valide.
-
-C'est exactement le `opensEntry` écrit à la main du M0, dérivé au lieu d'être codé. Un test vérifie
-la propriété qui compte : sur un corpus mêlant toutes les formes, aucune ligne acceptée par la
-regex complète n'est rejetée par le pré-filtre.
+The suite stood at **56 tests**, with every case of the Withings format replayed against both parsers.
 
 ---
 
-## Performance — la généricité ne coûte presque rien
+## The distinction that makes a generic pre-filter work
 
-1 GiB, 9 013 588 entrées, Apple M5 Pro, JDK 17, **une JVM par stratégie**.
+M0 established that rejecting continuation lines before the regex is the main lever — 18.6 % of
+lines. What remained was deriving it from a profile rather than writing it by hand.
 
-| | ns/entrée | Chaud | Extrapolé à 5 M | Budget 5 s |
+The first attempt failed instructively. `entry.opens` (`^\d{4}-\d{2}-\d{2} …`) does not reduce to a
+literal prefix, so it fell back to "run the regex" — which allocated a `String` per line **before**
+the parser allocated a second one. Strictly worse than no pre-filter at all. The profile-compilation
+test caught it immediately, by refusing a profile that produced a warning.
+
+The way through is a distinction the code now makes explicit:
+
+- **`entry.continues` is semantic.** Its answer decides whether a line joins the entry above or tries
+  to open one. It has to mean *exactly* what its regex says → `compileExact`, which produces a
+  literal prefix or, failing that, runs the regex and says so.
+- **`entry.opens` is only an optimisation.** The real regex runs immediately after and settles it. So
+  it need only be a **necessary condition**: it may accept lines that will not parse, and must never
+  reject one that would have → `compileNecessary`, which derives positional constraints ("position 0
+  is a digit, position 4 is a dash…") and stops at the first pattern it does not understand, keeping
+  what it has. A partial prefix is still a valid necessary condition.
+
+That is exactly M0's hand-written `opensEntry`, derived instead of coded. A test pins the property
+that matters: over a corpus mixing every shape, no line the full regex accepts is rejected by the
+pre-filter.
+
+---
+
+## Performance — genericity costs almost nothing
+
+1 GiB, 9,013,588 entries, Apple M5 Pro, JDK 17, **one JVM per strategy**.
+
+| | ns/entry | Warm | Extrapolated to 5 M | 5 s budget |
 |---|---:|---:|---:|:---:|
-| M0 — parseur regex codé en dur | 386 | 3,48 s | 1,93 s | ✅ |
-| **M1 — parseur générique piloté par profil** | **411** | **3,71 s** | **2,06 s** | ✅ |
-| Scanner d'octets (référence, non utilisé) | 152 | 1,37 s | 0,76 s | ✅ |
+| M0 — hardcoded regex parser | 386 | 3.48 s | 1.93 s | ✅ |
+| **M1 — generic, profile-driven parser** | **411** | **3.71 s** | **2.06 s** | ✅ |
+| Byte scanner (reference, unused) | 152 | 1.37 s | 0.76 s | ✅ |
 
-**+6 % pour une généricité complète** : numéros de groupes lus dans des tableaux, décodeur de
-niveaux nullable, boucle sur N facettes. Le scanner d'octets est à 152 ns contre 157 au M0 —
-inchangé, ce qui confirme qu'aucune régression ne s'est glissée dans le chemin partagé.
+**+6 % for complete genericity**: group numbers read out of arrays, a nullable level decoder, a loop
+over N facets. The byte scanner is at 152 ns against 157 at M0 — unchanged, which confirms no
+regression slipped into the shared path.
 
-### Requêtes, 18 workers
+### Queries, 18 workers
 
-| Requête | Résultats | 1 thread | Parallèle |
+| Query | Matches | 1 thread | Parallel |
 |---|---:|---:|---:|
-| `level>=W` | 926 146 | 8,6 ms | **1,3 ms** |
-| `category:Sync` | 2 105 017 | 30,1 ms | **3,1 ms** |
-| `level>=W category:Sync since:-2h` | 5 484 | 9,9 ms | **1,2 ms** |
-| `"connected"` | 899 314 | 527,3 ms | **40,7 ms** |
-| `level>=W backoff` | 89 655 | 95,7 ms | **9,1 ms** |
-| `-category:Ui level:E` | 200 293 | 7,1 ms | **0,8 ms** |
-| `tag:~Session` | 479 190 | 20,3 ms | **1,9 ms** |
+| `level>=W` | 926,146 | 8.6 ms | **1.3 ms** |
+| `category:Sync` | 2,105,017 | 30.1 ms | **3.1 ms** |
+| `level>=W category:Sync since:-2h` | 5,484 | 9.9 ms | **1.2 ms** |
+| `"connected"` | 899,314 | 527.3 ms | **40.7 ms** |
+| `level>=W backoff` | 89,655 | 95.7 ms | **9.1 ms** |
+| `-category:Ui level:E` | 200,293 | 7.1 ms | **0.8 ms** |
+| `tag:~Session` | 479,190 | 20.3 ms | **1.9 ms** |
 
 ---
 
-## Le piège de mesure, une deuxième fois
+## The measurement trap, a second time
 
-Mesurées **ensemble** dans une seule JVM, les deux stratégies donnaient 333 et 315 ns — le parseur
-générique paraissait plus rapide que le codé-en-dur du M0, et le scanner deux fois plus lent
-qu'au M0. Les deux chiffres étaient faux : faire transiter deux implémentations par les mêmes sites
-d'appel les rend polymorphes et le JIT cesse de spécialiser. C'est le même phénomène qui avait
-donné 613 ns à la stratégie B au M0.
+Measured **together** in one JVM, the two strategies gave 333 and 315 ns — the generic parser looked
+faster than M0's hardcoded one, and the byte scanner looked twice as slow as at M0. Both numbers were
+wrong: passing two implementations through the same call sites makes them polymorphic and the JIT
+stops specialising. It is the same phenomenon that gave strategy B 613 ns at M0.
 
-Le harnais imprime désormais l'avertissement à chaque exécution multi-stratégies. **La règle : le
-run combiné sert à la vérification croisée, jamais aux chiffres.**
-
----
-
-## Bugs que les tests ont attrapés
-
-- **`MMM` lu comme un mois à trois chiffres.** Le compilateur de timestamp acceptait n'importe
-  quelle largeur de motif, donc `dd MMM yyyy` prenait le chemin rapide et lisait « Jul » comme le
-  mois 3350. Les largeurs sont maintenant contraintes par lettre (`y` exactement 4, `M d H m s`
-  exactement 2, `S` de 1 à 9) et tout le reste bascule sur le repli.
-- **Le repli dépendait de la locale de la machine.** `DateTimeFormatter.ofPattern` sans locale
-  refusait « Jul » sur une machine en français. Les logs sont écrits par des programmes :
-  `Locale.ROOT`.
-- **Offsets décalés par les littéraux entre quotes.** `'T'` dans `yyyy-MM-dd'T'HH:mm:ss` occupe
-  trois caractères de motif et un de texte ; compter en caractères de motif décalait tous les
-  champs suivants de chaque timestamp ISO-8601.
-- **Interning d'une valeur non-ASCII.** Le chemin octets comparait des octets à des `char`, donc
-  une facette contenant un caractère multi-octets était ré-internée à chaque occurrence — une
-  entrée de facette dupliquée, pas un crash.
+The harness now prints the warning on every multi-strategy run. **The rule: a combined run is for the
+cross-check, never for the numbers.**
 
 ---
 
-## Dette assumée pour le M2
+## Bugs the tests caught
 
-- `MappedText` plafonne à 2 GiB (un seul mapping) — segmentation à écrire.
-- Pas encore de fusion multi-fichiers ; les marqueurs de section sont comptés mais ne deviennent
-  pas encore une facette `source`.
-- `[fields.x] values` sert à la validation et à l'ordre, mais ne signale pas encore une valeur
-  hors-liste à l'utilisateur.
-- Un seul profil livré. `android-logcat`, `json-lines`, `syslog` et `generic-timestamped` sont
-  attendus au M4 — et chacun exercera le repli du compilateur de timestamp, qui n'a aujourd'hui
-  qu'un test.
+- **`MMM` read as a three-digit month.** The timestamp compiler accepted any pattern width, so
+  `dd MMM yyyy` took the fast path and read "Jul" as month 3350. Widths are now constrained per
+  letter (`y` exactly 4, `M d H m s` exactly 2, `S` from 1 to 9) and everything else falls back.
+- **The fallback depended on the machine's locale.** `DateTimeFormatter.ofPattern` with no locale
+  refused "Jul" on a French machine. Logs are written by programs: `Locale.ROOT`.
+- **Offsets shifted by quoted literals.** `'T'` in `yyyy-MM-dd'T'HH:mm:ss` takes three pattern
+  characters and one of text; counting in pattern characters shifted every field after it, in every
+  ISO-8601 timestamp.
+- **A non-ASCII value re-interned.** The byte path compared bytes against `char`s, so a facet holding
+  a multi-byte character was re-interned on every occurrence — a duplicated facet entry, not a crash.
 
-## Reproduire
+---
+
+## Debt taken on for M2, and what became of it
+
+- `MappedText` caps at 2 GiB (one mapping) — segmenting still to write. **Still true**, though the
+  loader now refuses such a file before indexing it rather than after.
+- No multi-file merge yet; section markers are counted but do not become a `source` facet.
+  **The merge shipped in M2.** A section marker still does not become a facet.
+- `[fields.x] values` serves validation and ordering, but does not yet report an out-of-list value.
+  **This was not true when it was written** — the key was deserialised and read by nothing, for four
+  milestones. It was removed rather than implemented; see `docs/profiles.md`.
+- One profile shipped. `android-logcat`, `json-lines`, `syslog` and `generic-timestamped` are expected
+  at M4 — and each will exercise the timestamp compiler's fallback, which has only one test today.
+  **All shipped**, and `json-lines` turned out to need a source adapter rather than a profile.
+
+## Reproducing
 
 ```bash
-./gradlew :core:test                   # 56 tests
-./gradlew :spike:run --args="1g A"     # parseur générique, JVM propre — les chiffres ci-dessus
-./gradlew :spike:run --args="1g C"     # scanner de référence
-./gradlew :spike:run --args="1g"       # les deux + vérification croisée (pas pour les timings)
+./gradlew :core:test
+./gradlew :spike:run --args="1g A"     # generic parser, clean JVM — the numbers above
+./gradlew :spike:run --args="1g C"     # the reference scanner
+./gradlew :spike:run --args="1g"       # both, plus the cross-check (not for timings)
 ```

@@ -22,13 +22,18 @@ the rename stays reviewable.
 
 ## Branches
 
-`main`. While the repository has one author and no remote, committing straight to `main` is fine —
-there is nobody to review and no history to protect.
+`main`. This rule used to say that committing straight to `main` was fine "while the repository has
+one author and no remote", and that it would change the day it was pushed. **It has been pushed**, to
+GitHub and to a self-hosted GitLab, and commits are still going straight to `main` — with the owner's
+explicit say-so, since there is still one author and nobody to review.
 
-**That changes the day it is pushed.** From then on: work on a branch, open a pull request, and let
-GitHub do the merge. Never force-push `main`, and never rewrite published history — the one rewrite
-this repository has had (the author e-mail, across four commits) was safe precisely because nothing
-had been pushed.
+So the condition the rule was written against no longer holds, and the practice has not changed. That
+is a decision for the owner to make rather than a fact to record here: **ask before assuming either
+way.**
+
+What does not change: never force-push `main`, and never rewrite published history. The one rewrite
+this repository has had (the author e-mail, across four commits) was safe precisely because nothing had
+been pushed then.
 
 ## What not to commit
 
