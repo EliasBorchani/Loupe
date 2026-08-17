@@ -1,6 +1,8 @@
 package dev.loupe.core.source
 
 import java.io.File
+import java.io.IOException
+import java.nio.charset.StandardCharsets
 
 /**
  * Turns a file the indexer cannot read into one it can.
@@ -59,6 +61,48 @@ class ConversionReport(val entriesWritten: Long, val note: String)
 /** Everything that was converted while opening, for the UI to show. */
 class ConvertedSource(val original: File, val adapterName: String, val report: ConversionReport)
 
+/** Enough of a file to recognise its container, and never enough to matter if the file is huge. */
+internal const val SNIFF_BYTES: Int = 4096
+
+private const val NEWLINE: Byte = '\n'.code.toByte()
+
+/**
+ * The file's first line, or its first [SNIFF_BYTES] when the line is longer than that.
+ *
+ * `InputStream.read` may return fewer bytes than asked for, and both adapters used to call it once:
+ * a short read handed `claims()` a fragment of the first line with no newline in it, and the
+ * adapter judged the file on that. Looped now, until a newline arrives, the buffer fills, or the
+ * stream ends.
+ *
+ * Returns `""` rather than throwing, because [SourceAdapter.claims] is asked of every file that is
+ * opened — including unreadable ones, whose real error the loader reports far better than this could.
+ */
+internal fun sniffFirstLine(file: File): String = try {
+    val buffer = ByteArray(SNIFF_BYTES)
+    var filled = 0
+    var newline = -1
+    file.inputStream().use { stream ->
+        while (filled < buffer.size && newline < 0) {
+            val read: Int = stream.read(buffer, filled, buffer.size - filled)
+            if (read < 0) break
+            val scanFrom: Int = filled
+            filled += read
+            for (position in scanFrom until filled) {
+                if (buffer[position] == NEWLINE) {
+                    newline = position
+                    break
+                }
+            }
+        }
+    }
+    val end: Int = if (newline >= 0) newline else filled
+    // A byte-order mark is not whitespace, so trimming would leave it in front of the `{` every
+    // caller below is looking for.
+    String(buffer, 0, end, StandardCharsets.UTF_8).removePrefix("\uFEFF")
+} catch (failure: IOException) {
+    ""
+}
+
 object SourceAdapters {
 
     /**
@@ -67,5 +111,20 @@ object SourceAdapters {
      */
     val all: List<SourceAdapter> = listOf(AndroidStudioLogcatAdapter, JsonLinesAdapter)
 
-    fun claiming(file: File): SourceAdapter? = all.firstOrNull { adapter -> adapter.claims(file) }
+    /**
+     * Adapters must be mutually exclusive.
+     *
+     * Two of them claiming one file is a bug, and resolving it by list order would hide it behind a
+     * conversion that quietly produces the wrong text. The disjointness used to be argued in two
+     * KDocs and encoded a third time as the order of [all]; it is a check and a test now, and the
+     * order carries no meaning.
+     */
+    fun claiming(file: File): SourceAdapter? {
+        val claimants: List<SourceAdapter> = all.filter { adapter -> adapter.claims(file) }
+        require(claimants.size <= 1) {
+            "'${file.name}' is claimed by ${claimants.joinToString { adapter -> adapter.name }}. " +
+                "Source adapters must be mutually exclusive."
+        }
+        return claimants.firstOrNull()
+    }
 }

@@ -60,8 +60,6 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
 
     private const val TIMESTAMP_WIDTH = 23
 
-    private const val SNIFF_BYTES = 4096
-
     private val LINE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
     private val CONTINUATION_INDENT: String = " ".repeat(TIMESTAMP_WIDTH)
@@ -96,11 +94,9 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
      * document — Android Studio's export — and belongs to the other adapter; that one character of
      * difference is the whole test, and it needs no more of the file than its opening bytes.
      */
-    override fun claims(file: File): Boolean = try {
-        val firstLine: String = firstLineOf(file).trim()
-        firstLine.length > 1 && firstLine.startsWith("{")
-    } catch (failure: java.io.IOException) {
-        false
+    override fun claims(file: File): Boolean {
+        val firstLine: String = sniffFirstLine(file).trim()
+        return firstLine.length > 1 && firstLine.startsWith("{")
     }
 
     override fun convert(source: File, destination: File): ConversionReport {
@@ -245,14 +241,6 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
 
     /** A newline inside a value would forge a continuation line and swallow the entry after it. */
     private fun String.singleLine(): String = replace('\n', ' ').replace('\r', ' ')
-
-    private fun firstLineOf(file: File): String =
-        file.inputStream().use { stream ->
-            val buffer = ByteArray(SNIFF_BYTES)
-            val read: Int = stream.read(buffer)
-            if (read <= 0) return ""
-            String(buffer, 0, read, StandardCharsets.UTF_8).lineSequence().first()
-        }
 
     private class KeyMapping(
         val timestamp: String,

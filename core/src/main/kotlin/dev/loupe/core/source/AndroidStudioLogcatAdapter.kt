@@ -71,9 +71,6 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
     /** The timestamp width, and so the continuation indent the profile strips back off. */
     private const val TIMESTAMP_WIDTH = 23
 
-    /** Enough to see the opening brace and decide; never enough to matter if the file is huge. */
-    private const val SNIFF_BYTES = 4096
-
     private val LINE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
     override val name: String = "Android Studio logcat export"
@@ -83,13 +80,7 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
      * test is what separates this from a JSON-lines log, where the first line is a whole object and
      * which a line-oriented profile can read perfectly well without any help from here.
      */
-    override fun claims(file: File): Boolean = try {
-        firstLineOf(file).trim() == "{"
-    } catch (failure: java.io.IOException) {
-        // claims() is asked of every file that is opened; an unreadable one is not this adapter's
-        // problem to report, and the loader will fail on it with something far more useful.
-        false
-    }
+    override fun claims(file: File): Boolean = sniffFirstLine(file).trim() == "{"
 
     override fun convert(source: File, destination: File): ConversionReport {
         var written = 0L
@@ -236,15 +227,6 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
         }
         append(']')
     }
-
-    private fun firstLineOf(file: File): String =
-        file.inputStream().use { stream ->
-            val buffer = ByteArray(SNIFF_BYTES)
-            val read: Int = stream.read(buffer)
-            if (read <= 0) return ""
-            val text = String(buffer, 0, read, StandardCharsets.UTF_8)
-            text.lineSequence().first()
-        }
 
     private class LogcatMessage {
         var seconds: Long = 0
