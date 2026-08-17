@@ -36,6 +36,34 @@ So `macOS { packageVersion = "1.0.0" }`. That number belongs to Apple; the one a
 the git tag, the `.dmg`'s file name and the release notes. It is worth knowing this is a lie the
 platform insists on, rather than rediscovering it at release time.
 
+## The `.dmg` layout comes from the Finder, not from jpackage
+
+This one only shows up in CI, and it shows up as "the app cannot be installed".
+
+jpackage does not lay the disk image out itself. It **drives the Finder**, through an AppleScript
+(`DMGsetup.scpt`): the `/Applications` drop target, the icon positions and the background image all
+come from that one step. The drop target it creates is a **Finder alias** — a 596-byte file, which
+the POSIX layer spells `:Applications` — not a symlink.
+
+A machine with no GUI session has no Finder to drive. jpackage logs a warning, carries on, and ships
+a `.dmg` containing nothing but the `.app`: no background, no icon layout, and **no way to install
+the app**. That is what a GitLab runner installed as a launchd *daemon* produces — the same missing
+session that leaves the login keychain locked for signing.
+
+`tools/package-dmg.sh` checks for the target and repairs it with a plain `ln -s /Applications`
+(converting to a read-write image, adding the entry, recompressing). It only fires when the target
+is missing, so a build on a real desktop keeps jpackage's layout untouched. A notarised image is
+refused rather than repaired — editing it would break the staple.
+
+**The repair is a safety net, not the fix.** It gets you an installable `.dmg`, but a bare one. The
+fix is to give the runner a session, which also gets you signing:
+
+```bash
+gitlab-runner install    # as the runner user, not --user root
+```
+
+and log that user in once.
+
 ## One build per architecture
 
 `compose.desktop.currentOs` resolves to the **build machine's** architecture. Skiko ships one native
@@ -119,7 +147,8 @@ session, and the login keychain stays locked — signing fails with a keychain e
 so. Two fixes, in order of preference:
 
 - Install the runner as a **launchd agent** in the runner user's session (`gitlab-runner install`
-  without `--user root`), and log that user in once. The keychain then unlocks with the session.
+  without `--user root`), and log that user in once. The keychain then unlocks with the session —
+  and the Finder becomes available, which is what lays the `.dmg` out.
 - Or unlock it in the job, which means a keychain password in a masked CI variable:
   `security unlock-keychain -p "$KEYCHAIN_PWD" ~/Library/Keychains/login.keychain-db`.
 
