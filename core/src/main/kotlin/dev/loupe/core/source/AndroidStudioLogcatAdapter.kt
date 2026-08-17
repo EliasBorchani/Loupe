@@ -1,15 +1,7 @@
 package dev.loupe.core.source
 
-import java.io.BufferedReader
-import java.io.BufferedWriter
 import java.io.File
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.charset.StandardCharsets
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Reads Android Studio's `.logcat` export.
@@ -67,12 +59,6 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
 
     override val emittedProfileName: String = "android-studio-logcat"
 
-
-    /** The timestamp width, and so the continuation indent the profile strips back off. */
-    private const val TIMESTAMP_WIDTH = 23
-
-    private val LINE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
-
     override val name: String = "Android Studio logcat export"
 
     /**
@@ -85,35 +71,32 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
     override fun convert(source: File, destination: File): ConversionReport {
         var written = 0L
         var unknownLevels = 0L
-        BufferedReader(InputStreamReader(source.inputStream(), StandardCharsets.UTF_8), 1 shl 16).use { reader ->
-            BufferedWriter(OutputStreamWriter(destination.outputStream(), StandardCharsets.UTF_8), 1 shl 16).use { writer ->
-                val scanner = JsonScanner(reader)
-                val zone: ZoneId = ZoneId.systemDefault()
-                var sawMessages = false
-                scanner.expect('{')
-                if (!scanner.skipIf('}')) {
-                    do {
-                        val key: String = scanner.readString()
-                        scanner.expect(':')
-                        if (key == "logcatMessages") {
-                            sawMessages = true
-                            forEachMessage(scanner) { message ->
-                                if (message.unknownLevel) unknownLevels++
-                                writeLine(writer, message, zone)
-                                written++
-                            }
-                        } else {
-                            scanner.skipValue()
+        CanonicalLineWriter.render(source, destination, shape) { reader, writer ->
+            val scanner = JsonScanner(reader)
+            var sawMessages = false
+            scanner.expect('{')
+            if (!scanner.skipIf('}')) {
+                do {
+                    val key: String = scanner.readString()
+                    scanner.expect(':')
+                    if (key == "logcatMessages") {
+                        sawMessages = true
+                        forEachMessage(scanner) { message ->
+                            if (message.unknownLevel) unknownLevels++
+                            writeLine(writer, message)
+                            written++
                         }
-                    } while (scanner.skipIf(','))
-                    scanner.expect('}')
-                }
-                if (!sawMessages) {
-                    throw JsonFormatException(
-                        "'${source.name}' is a JSON document but has no \"logcatMessages\" array — " +
-                            "it does not look like an Android Studio logcat export.",
-                    )
-                }
+                    } else {
+                        scanner.skipValue()
+                    }
+                } while (scanner.skipIf(','))
+                scanner.expect('}')
+            }
+            if (!sawMessages) {
+                throw JsonFormatException(
+                    "'${source.name}' is a JSON document but has no \"logcatMessages\" array — " +
+                        "it does not look like an Android Studio logcat export.",
+                )
             }
         }
         return ConversionReport(
@@ -188,44 +171,13 @@ object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
         scanner.expect('}')
     }
 
-    private fun writeLine(writer: Writer, message: LogcatMessage, zone: ZoneId) {
-        val line = StringBuilder(message.text.length + 96)
-        line.append(LINE_FORMAT.format(Instant.ofEpochSecond(message.seconds, message.nanos).atZone(zone)))
-        // The space is written, not left to the padding: a 7-digit pid — Android allows them —
-        // would fill the field and weld the timestamp to the number.
-        line.append(' ').append(message.pid.toString().padStart(5))
-        line.append(' ').append(message.tid.toString().padStart(5))
-        line.append(' ').append(message.level).append(' ')
-        // Tag first: it is both what a reader scans for and the field that may hold a bracket.
-        line.appendBracketed(message.tag)
-        line.append(' ')
-        line.appendBracketed(message.process)
-        line.append(' ')
-        // A message carries its own newlines — a stack trace is one message, not one per frame.
-        // Indenting the wrapped lines to the timestamp width is what lets the profile fold them
-        // back into a single entry, which is what makes a trace filterable as one thing.
-        message.text.lineSequence().forEachIndexed { position, textLine ->
-            if (position > 0) line.append('\n').append(CONTINUATION_INDENT)
-            line.append(textLine)
-        }
-        line.append('\n')
-        writer.append(line)
-    }
-
-    private val CONTINUATION_INDENT: String = " ".repeat(TIMESTAMP_WIDTH)
-
-    /**
-     * Written through verbatim — deliberately. The field order, not an escape, is what keeps a
-     * bracket inside a tag readable; anything escaped here would reach the facet still escaped.
-     */
-    private fun StringBuilder.appendBracketed(value: String) {
-        append('[')
-        value.forEach { character ->
-            // A newline would forge a continuation line and swallow the entry after it. Never seen
-            // in a tag or an application id, and cheap to refuse.
-            if (character == '\n' || character == '\r') append(' ') else append(character)
-        }
-        append(']')
+    private fun writeLine(writer: CanonicalLineWriter, message: LogcatMessage) {
+        writer.set(PID, message.pid)
+        writer.set(TID, message.tid)
+        writer.set(LEVEL, message.level.toString())
+        writer.set(TAG, message.tag)
+        writer.set(PROCESS, message.process)
+        writer.write(Instant.ofEpochSecond(message.seconds, message.nanos), message.text)
     }
 
     private class LogcatMessage {

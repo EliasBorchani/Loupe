@@ -1,18 +1,10 @@
 package dev.loupe.core.source
 
-import java.io.BufferedReader
-import java.io.BufferedWriter
 import java.io.File
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 
 /**
  * Reads JSON lines — NDJSON, one object per line, as Docker, pino, Bunyan, Serilog, Vector and the
@@ -58,12 +50,6 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
     override val emittedProfileName: String = "json-lines"
 
 
-    private const val TIMESTAMP_WIDTH = 23
-
-    private val LINE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
-
-    private val CONTINUATION_INDENT: String = " ".repeat(TIMESTAMP_WIDTH)
-
     private val TIMESTAMP_KEYS: List<String> =
         listOf("timestamp", "@timestamp", "time", "date", "datetime", "eventtime", "ts")
 
@@ -103,19 +89,19 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
         var written = 0L
         var unknownLevels = 0L
         var mapping: KeyMapping? = null
-        BufferedReader(InputStreamReader(source.inputStream(), StandardCharsets.UTF_8), 1 shl 16).use { reader ->
-            BufferedWriter(OutputStreamWriter(destination.outputStream(), StandardCharsets.UTF_8), 1 shl 16).use { writer ->
-                val scanner = JsonScanner(reader)
-                val zone: ZoneId = ZoneId.systemDefault()
-                while (true) {
-                    scanner.skipBlanks()
-                    if (scanner.atEndOfInput) break
-                    val fields: Map<String, String> = readFlatObject(scanner)
-                    if (fields.isEmpty()) continue
-                    val keys: KeyMapping = mapping ?: mapKeys(source, fields).also { chosen -> mapping = chosen }
-                    if (writeLine(writer, fields, keys, zone, source)) unknownLevels++
-                    written++
-                }
+        CanonicalLineWriter.render(source, destination, shape) { reader, writer ->
+            val scanner = JsonScanner(reader)
+            // For *reading* a zone-less local time out of the source, not for writing: the writer
+            // owns the output zone.
+            val zone: ZoneId = ZoneId.systemDefault()
+            while (true) {
+                scanner.skipBlanks()
+                if (scanner.atEndOfInput) break
+                val fields: Map<String, String> = readFlatObject(scanner)
+                if (fields.isEmpty()) continue
+                val keys: KeyMapping = mapping ?: mapKeys(source, fields).also { chosen -> mapping = chosen }
+                if (writeLine(writer, fields, keys, zone, source)) unknownLevels++
+                written++
             }
         }
         val keys: KeyMapping = mapping
@@ -135,7 +121,7 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
 
     /** Returns whether the level had to be guessed, so the caller can count it. */
     private fun writeLine(
-        writer: Writer,
+        writer: CanonicalLineWriter,
         fields: Map<String, String>,
         keys: KeyMapping,
         zone: ZoneId,
@@ -151,30 +137,16 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
         val level: String = rawLevel?.let { value -> LEVELS[value.lowercase()] } ?: "INFO"
         val guessed: Boolean = rawLevel != null && LEVELS[rawLevel.lowercase()] == null
 
-        val line = StringBuilder(128)
-        line.append(LINE_FORMAT.format(instant.atZone(zone)))
-        line.append(" [").append(level).append("] [")
-        line.append(keys.context?.let { key -> fields[key].orEmpty() }.orEmpty().singleLine()).append("] ")
-        appendIndented(line, fields[keys.message].orEmpty())
+        writer.set(LEVEL, level)
+        writer.set(CONTEXT, keys.context?.let { key -> fields[key] }.orEmpty())
 
-        // Anything the four slots did not take. On its own indented line so it belongs to the entry
-        // and stays searchable, rather than being quietly dropped for want of a column.
+        // Anything the columns did not take. On its own indented line so it belongs to the entry and
+        // stays searchable, rather than being quietly dropped for want of a column.
         val extras: String = fields.entries
             .filter { field -> field.key !in keys.taken && field.value.isNotEmpty() }
-            .joinToString(" ") { field -> "${field.key}=${field.value.singleLine()}" }
-        if (extras.isNotEmpty()) line.append('\n').append(CONTINUATION_INDENT).append(extras)
-
-        line.append('\n')
-        writer.append(line)
+            .joinToString(" ") { field -> "${field.key}=${field.value}" }
+        writer.write(instant, fields[keys.message].orEmpty(), extras)
         return guessed
-    }
-
-    /** A message keeps its own newlines; indenting them folds the whole thing into one entry. */
-    private fun appendIndented(line: StringBuilder, text: String) {
-        text.lineSequence().forEachIndexed { position, textLine ->
-            if (position > 0) line.append('\n').append(CONTINUATION_INDENT)
-            line.append(textLine)
-        }
     }
 
     private fun mapKeys(source: File, fields: Map<String, String>): KeyMapping {
@@ -238,9 +210,6 @@ object JsonLinesAdapter : CanonicalSourceAdapter {
         runCatching { return LocalDateTime.parse(value).atZone(zone).toInstant() }
         return null
     }
-
-    /** A newline inside a value would forge a continuation line and swallow the entry after it. */
-    private fun String.singleLine(): String = replace('\n', ' ').replace('\r', ' ')
 
     private class KeyMapping(
         val timestamp: String,
