@@ -60,7 +60,7 @@ the numbers that did *not* meet target on the first attempt:
 
 ```bash
 ./gradlew :desktop:run --args="~/logs"   # open a file or a folder of them
-./gradlew test                           # 103 tests
+./gradlew test                           # 109 tests
 ./gradlew :spike:run --args="1g A"       # generate a 1 GiB fixture and benchmark the indexer
 ./gradlew :desktop:packageDmg            # unsigned .dmg
 ```

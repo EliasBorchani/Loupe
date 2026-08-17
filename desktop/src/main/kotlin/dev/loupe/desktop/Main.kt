@@ -46,6 +46,7 @@ import dev.loupe.desktop.ui.DetailPane
 import dev.loupe.desktop.ui.Divider
 import dev.loupe.desktop.ui.FacetSidebar
 import dev.loupe.desktop.ui.LogList
+import dev.loupe.desktop.ui.ParseReportPane
 import dev.loupe.desktop.ui.QueryBar
 import dev.loupe.desktop.ui.SourceHeader
 import dev.loupe.desktop.ui.StatusBar
@@ -98,6 +99,7 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
     val viewMode: ViewMode by state.viewMode.collectAsState()
     val selection: Selection? by state.selection.collectAsState()
     val notice: String? by state.notice.collectAsState()
+    val showParseReport: Boolean by state.showParseReport.collectAsState()
     val expandedEntries: Set<Int> by state.expandedEntries.collectAsState()
 
     val dropTarget = remember {
@@ -133,6 +135,7 @@ private fun LoupeApp(initialPaths: List<File> = emptyList()) {
                 viewMode = viewMode,
                 selection = selection,
                 notice = notice,
+                showParseReport = showParseReport,
                 expandedEntries = expandedEntries,
                 onCopyText = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(StringSelection(text))) } },
             )
@@ -149,6 +152,7 @@ private fun Loaded(
     viewMode: ViewMode,
     selection: Selection?,
     notice: String?,
+    showParseReport: Boolean,
     expandedEntries: Set<Int>,
     onCopyText: (String) -> Unit,
 ) {
@@ -221,15 +225,28 @@ private fun Loaded(
             }
         }
 
-        focusedEntry?.let { entry ->
-            Divider()
-            DetailPane(
-                source = source,
-                entry = entry,
-                context = state.contextAround(entry),
-                onClose = state::clearSelection,
-                onCopy = copySelection,
-            )
+        // One bottom slot, one thing in it: the selected entry, or why some lines are unaccounted for.
+        when {
+            showParseReport -> {
+                Divider()
+                ParseReportPane(
+                    report = source.index.unrecognised,
+                    totalLines = source.index.lineCount,
+                    fileNameOf = { fileId -> source.files.getOrNull(fileId)?.name ?: "?" },
+                    onClose = { state.showParseReport(false) },
+                )
+            }
+
+            focusedEntry != null -> {
+                Divider()
+                DetailPane(
+                    source = source,
+                    entry = focusedEntry,
+                    context = state.contextAround(focusedEntry),
+                    onClose = state::clearSelection,
+                    onCopy = copySelection,
+                )
+            }
         }
 
         Divider()
@@ -241,6 +258,7 @@ private fun Loaded(
             notice = notice,
             viewMode = viewMode,
             onViewModeChange = state::setViewMode,
+            onShowParseReport = { state.showParseReport(true) },
         )
     }
 }

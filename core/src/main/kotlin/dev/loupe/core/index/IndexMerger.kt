@@ -106,6 +106,10 @@ object IndexMerger {
             sectionLineCount = sources.sumOf { source -> source.sectionLineCount },
             noticeLineCount = sources.sumOf { source -> source.noticeLineCount },
             unrecognisedLineCount = sources.sumOf { source -> source.unrecognisedLineCount },
+            unrecognised = UnrecognisedReport.merge(
+                reports = sources.map { source -> source.unrecognised },
+                fileIds = sources.indices.toList(),
+            ),
             fileFacetIndex = fileFacetIndex,
         )
     }

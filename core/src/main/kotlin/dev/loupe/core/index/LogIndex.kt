@@ -40,6 +40,8 @@ class LogIndex(
     val sectionLineCount: Long,
     val noticeLineCount: Long,
     val unrecognisedLineCount: Long,
+    /** What the profile could not explain: counted in full, sampled by shape. */
+    val unrecognised: UnrecognisedReport = UnrecognisedReport.EMPTY,
     /** Index into [facets] of the synthetic `file` facet, or [NO_FACET] for a single file. */
     val fileFacetIndex: Int = NO_FACET,
 ) {

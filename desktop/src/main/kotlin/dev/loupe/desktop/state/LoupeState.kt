@@ -146,6 +146,10 @@ class LoupeState(private val scope: CoroutineScope) {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    /** The bottom slot holds one thing at a time: the selected entry, or the parse report. */
+    private val _showParseReport = MutableStateFlow(false)
+    val showParseReport: StateFlow<Boolean> = _showParseReport.asStateFlow()
+
     private val _expandedEntries = MutableStateFlow<Set<Int>>(emptySet())
     val expandedEntries: StateFlow<Set<Int>> = _expandedEntries.asStateFlow()
 
@@ -174,6 +178,7 @@ class LoupeState(private val scope: CoroutineScope) {
         openJob = scope.launch {
             _status.value = OpenStatus.Working(OpenPhase.Detecting, 0, 0)
             _selection.value = null
+            _showParseReport.value = false
             _expandedEntries.value = emptySet()
             try {
                 val opened: LogSource = withContext(Dispatchers.IO) {
@@ -214,9 +219,14 @@ class LoupeState(private val scope: CoroutineScope) {
         _viewMode.value = mode
     }
 
+    fun showParseReport(show: Boolean) {
+        _showParseReport.value = show
+    }
+
     /** A plain click: one row, and a new anchor. */
     fun selectAt(position: Int) {
         _selection.value = Selection(position, position)
+        _showParseReport.value = false
     }
 
     /** Shift-click: keep the anchor, move the far end. With nothing selected, behaves like a click. */

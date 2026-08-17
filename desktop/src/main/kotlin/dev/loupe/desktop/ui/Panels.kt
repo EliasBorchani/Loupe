@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.loupe.core.index.LogIndex
+import dev.loupe.core.index.UnrecognisedKind
+import dev.loupe.core.index.UnrecognisedReport
 import dev.loupe.core.index.ValueDictionary
 import dev.loupe.core.profile.CompiledFacet
 import dev.loupe.core.profile.FacetMode
@@ -656,6 +658,7 @@ fun StatusBar(
     notice: String?,
     viewMode: ViewMode,
     onViewModeChange: (ViewMode) -> Unit,
+    onShowParseReport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LoupeTheme.colors
@@ -670,14 +673,17 @@ fun StatusBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.large),
     ) {
+        // Not decoration: a line the profile cannot account for is a line no query will ever find,
+        // so the indicator answers the question it raises rather than only posing it.
         BasicText(
             text = if (recognised >= 1.0) {
                 "✓ all ${COUNT_FORMAT.format(index.lineCount)} lines recognised"
             } else {
                 "${COUNT_FORMAT.format(index.lineCount - index.unrecognisedLineCount)} / " +
-                    "${COUNT_FORMAT.format(index.lineCount)} lines recognised"
+                    "${COUNT_FORMAT.format(index.lineCount)} lines recognised — why?"
             },
             style = LoupeTheme.type.uiSmall.copy(color = if (recognised >= 1.0) colors.accentInk else colors.warn),
+            modifier = if (recognised >= 1.0) Modifier else Modifier.clickable(onClick = onShowParseReport),
         )
         BasicText(
             text = "${COUNT_FORMAT.format(index.continuationLineCount)} folded",
@@ -726,6 +732,88 @@ private fun ViewModeToggle(mode: ViewMode, onChange: (ViewMode) -> Unit) {
                     .clickable { onChange(candidate) }
                     .padding(horizontal = Spacing.small, vertical = 3.dp),
             )
+        }
+    }
+}
+
+/**
+ * What the profile could not explain, grouped by shape.
+ *
+ * The count says the profile is imperfect; the *shape* says which part of it is wrong, and they
+ * point at very different fixes. This matters most when writing a new profile, where the first
+ * draft is always wrong somewhere and the alternative is guessing.
+ */
+@Composable
+fun ParseReportPane(
+    report: UnrecognisedReport,
+    totalLines: Long,
+    fileNameOf: (Int) -> String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LoupeTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(208.dp)
+            .background(colors.surface)
+            .padding(horizontal = Spacing.medium, vertical = Spacing.small),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("UNRECOGNISED LINES", style = LoupeTheme.type.label.copy(color = colors.inkTertiary))
+            Spacer(Modifier.weight(1f))
+            BasicText(
+                text = "close",
+                style = LoupeTheme.type.uiSmall.copy(color = colors.accent),
+                modifier = Modifier.clickable(onClick = onClose),
+            )
+        }
+        BasicText(
+            text = "${COUNT_FORMAT.format(report.total)} of ${COUNT_FORMAT.format(totalLines)} lines are neither " +
+                "an entry, a continuation, nor a declared marker — so nothing will ever find them.",
+            style = LoupeTheme.type.uiSmall.copy(color = colors.inkSecondary),
+            modifier = Modifier.padding(vertical = Spacing.small),
+        )
+
+        Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+            report.kindsByCount().forEach { kind ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.small),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.small),
+                ) {
+                    BasicText(
+                        text = COUNT_FORMAT.format(report.countOf(kind)),
+                        style = LoupeTheme.type.monoSmall.copy(color = colors.warn, fontWeight = FontWeight.Bold),
+                    )
+                    Column {
+                        BasicText(
+                            text = kind.label,
+                            style = LoupeTheme.type.uiSmall.copy(color = colors.ink, fontWeight = FontWeight.SemiBold),
+                        )
+                        BasicText(
+                            text = kind.meaning,
+                            style = LoupeTheme.type.uiSmall.copy(color = colors.inkTertiary),
+                        )
+                        report.samplesOf(kind).forEach { sample ->
+                            Row(
+                                modifier = Modifier.padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.small),
+                            ) {
+                                BasicText(
+                                    text = "${fileNameOf(sample.fileId)}:${sample.lineNumber}",
+                                    style = LoupeTheme.type.monoSmall.copy(color = colors.inkTertiary),
+                                )
+                                BasicText(
+                                    text = if (sample.text.isEmpty()) "⟨empty⟩" else sample.text,
+                                    style = LoupeTheme.type.monoSmall.copy(color = colors.inkSecondary),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

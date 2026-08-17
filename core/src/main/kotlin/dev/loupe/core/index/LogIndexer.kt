@@ -36,6 +36,7 @@ class LogIndexer(private val parser: EntryParser) {
         val levelCounts = IntArray(maxOf(parser.profile.levelCount, 1))
         val sink: ParsedEntry = parser.newSink()
         val markers = parser.profile.markers
+        val unrecognised = UnrecognisedCollector(parser.profile)
 
         var continuationLineCount = 0L
         var sectionLineCount = 0L
@@ -45,8 +46,10 @@ class LogIndexer(private val parser: EntryParser) {
         var openEntryOffset = -1L
         var openEntryEndOffset = -1L
 
+        var lineNumber = 0L
         val lineCount: Long = ChunkedLineReader(file).forEachLine(onBytesRead) { buffer, start, end, fileOffset ->
             val lineEndOffset: Long = fileOffset + (end - start)
+            lineNumber++
 
             if (openEntryOffset >= 0L && parser.isContinuation(buffer, start, end)) {
                 // Not a new entry — the previous one's message wrapping. Just extend its range.
@@ -67,7 +70,12 @@ class LogIndexer(private val parser: EntryParser) {
                 when (classify(markers, buffer, start, end)) {
                     MarkerRole.Section -> sectionLineCount++
                     MarkerRole.Notice -> noticeLineCount++
-                    null -> unrecognisedLineCount++
+                    // Counted in full, sampled per shape: the count is a health indicator, the
+                    // shape is what says which part of the profile is wrong.
+                    null -> {
+                        unrecognisedLineCount++
+                        unrecognised.record(buffer, start, end, lineNumber)
+                    }
                 }
             }
         }
@@ -85,6 +93,7 @@ class LogIndexer(private val parser: EntryParser) {
             sectionLineCount = sectionLineCount,
             noticeLineCount = noticeLineCount,
             unrecognisedLineCount = unrecognisedLineCount,
+            unrecognised = unrecognised.build(),
         )
     }
 
@@ -145,6 +154,7 @@ private class EntryColumns(initialCapacity: Int, private val facetCount: Int) {
         sectionLineCount: Long,
         noticeLineCount: Long,
         unrecognisedLineCount: Long,
+        unrecognised: UnrecognisedReport,
     ): LogIndex = LogIndex(
         profile = profile,
         facets = profile.facets,
@@ -161,6 +171,7 @@ private class EntryColumns(initialCapacity: Int, private val facetCount: Int) {
         sectionLineCount = sectionLineCount,
         noticeLineCount = noticeLineCount,
         unrecognisedLineCount = unrecognisedLineCount,
+        unrecognised = unrecognised,
     )
 
     private fun grow() {

@@ -8,7 +8,7 @@ Born from `LogViewerActivity` in the Withings HealthMate Android app, which had 
 6" screen and the wrong pipeline (`List<String>` + `filter { contains }`). The bundled
 `withings-healthmate` profile is the reference format; nothing about it is compiled in.
 
-**State: M0 – M3 done. M4 next.** 103 tests, `main`, no remote yet. Docs in `docs/` (French);
+**State: M0 – M3 done. M4 next.** 109 tests, `main`, no remote yet. Docs in `docs/` (French);
 the code, README and profiles are English.
 
 ---
@@ -69,6 +69,9 @@ the KDoc at the site; this is the index.
   free, and a single open file pays nothing for it.
 - **A profile reports every problem at once**, at load time. Hand-written profiles are usually wrong
   in more than one way on the first try.
+- **Unrecognised lines are counted in full and sampled by shape.** The count says a profile is
+  imperfect; the shape says which part of it is wrong. Sampling is capped *per shape*, so the one
+  that dominates cannot crowd out the one that explains the problem.
 
 **UI**
 - **The query text is the single source of truth.** Ticking a facet does not update a hidden
@@ -123,7 +126,7 @@ combined run.
 ## Commands
 
 ```bash
-./gradlew test                                   # 103 tests, all three modules
+./gradlew test                                   # 109 tests, all three modules
 ./gradlew :desktop:run --args="~/logs"           # open a file or folder; no arg = empty window
 ./gradlew :desktop:packageDmg                    # unsigned .dmg
 ./gradlew build                                  # must be warning-free

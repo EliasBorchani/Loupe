@@ -69,6 +69,32 @@ Il est posé sur la `Row` du contenu et non sur l'item, pour que la surbrillance
 toujours la largeur visible pendant que le texte glisse à l'intérieur. Le `weight(1f)` a disparu
 avec : dans un défilement horizontal la largeur est non bornée, et un poids a besoin d'une borne.
 
+## L'indicateur de santé répond à sa propre question
+
+`40 168 / 41 087 lignes reconnues` disait qu'il y avait un problème sans dire lequel — ce qui est la
+moitié du travail. Le compteur est maintenant **cliquable** et ouvre un panneau qui groupe les
+lignes orphelines **par forme**, avec un exemple de chacune et sa position.
+
+Le nombre dit que le profil est imparfait ; la forme dit *quelle partie* l'est, et les quatre
+pointent vers des correctifs très différents :
+
+| Forme | Ce que ça veut dire |
+|---|---|
+| ligne vide | Bénin. Écriture partielle, ou un second producteur sur le même fichier. |
+| espaces seulement | `entry.continues` est proche mais pas exact — vérifier la largeur d'indentation réelle. |
+| indentée, mais pas une continuation | Ressemble à un message replié ou une frame. `entry.continues` est probablement trop strict : un writer plus ancien avec un horodatage de largeur différente indente d'autant moins. |
+| **ressemble à une entrée, mais `parse.regex` la rejette** | **Celle qui vaut le détour.** Le pré-filtre a dit oui et la regex complète a dit non : le format a une forme que le profil ne décrit pas. |
+| autre chose | Écrite par un tout autre chemin de code. |
+
+Compté **en entier**, échantillonné **par forme**. En entier parce qu'un ratio approximatif ne vaut
+rien ; échantillonné parce qu'un fichier ouvert avec le mauvais profil a *toutes* ses lignes
+orphelines, et retenir neuf millions de chaînes pour le dire transformerait un diagnostic en
+`OutOfMemoryError`. Le plafond est **par forme et non global** : une forme domine presque toujours,
+et un plafond global la laisserait écraser l'unique exemple de celle qui explique le problème.
+
+L'outil sait donc diagnostiquer son propre profil — ce qui compte d'autant plus qu'on va en écrire
+quatre autres au M4.
+
 ---
 
 ## Reste pour le M4
