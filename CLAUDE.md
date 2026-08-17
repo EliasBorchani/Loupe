@@ -73,6 +73,9 @@ the KDoc at the site; this is the index.
   project says 0.1.0. That number is Apple's; the human one is the tag and the file name.
 - **One `.dmg` per architecture.** Skiko ships one native library per arch and there is no universal
   binary, so an arm64 build will not launch on an Intel Mac.
+- **Both CI systems call `tools/package-dmg.sh`.** GitHub Actions and GitLab CI each have a config,
+  and the packaging steps live in one script so they cannot drift. GitLab's release job has been
+  reviewed, never executed — there is no GitLab project behind it.
 - **63 MB is the floor**, measured: ~30 MB Skia, ~35 MB AWT runtime, the rest Compose and Kotlin.
   jlink already keeps only seven modules. Do not go looking for something to trim.
 

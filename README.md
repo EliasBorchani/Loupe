@@ -69,7 +69,11 @@ the numbers that did *not* meet target on the first attempt:
 ./gradlew :desktop:packageDmg            # unsigned .dmg — see docs/packaging.md
 ```
 
-Requires JDK 17+. No other setup.
+Requires JDK 17+. No other setup — packaging provisions its own Adoptium JDK, since jpackage embeds
+the runtime it builds with.
+
+CI runs on both GitHub Actions and GitLab CI; the packaging steps live in `tools/package-dmg.sh` so
+the two cannot drift. See [`docs/packaging.md`](docs/packaging.md).
 
 ## Roadmap
 

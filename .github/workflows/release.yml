@@ -47,19 +47,13 @@ jobs:
       - name: Test before packaging
         run: ./gradlew build
 
+      # The same script GitLab CI runs, so the two cannot drift.
       - name: Package
-        run: ./gradlew :desktop:packageDmg
-
-      - name: Name the artifact after the tag
         id: artifact
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          SRC=$(find desktop/build/compose/binaries/main/dmg -name '*.dmg' | head -1)
-          [ -n "$SRC" ] || { echo "::error::no .dmg was produced"; exit 1; }
-          DEST="Loupe-${TAG#v}-${{ matrix.arch }}.dmg"
-          mv "$SRC" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
-          shasum -a 256 "$DEST" | tee "$DEST.sha256"
+          DMG=$(./tools/package-dmg.sh "${TAG#v}" "${{ matrix.arch }}")
+          echo "path=$DMG" >> "$GITHUB_OUTPUT"
 
       # Unsigned, and the release notes say so. Signing needs a Developer ID certificate and an
       # app-specific password in repository secrets; see docs/packaging.md for the four lines that

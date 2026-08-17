@@ -138,6 +138,40 @@ into an afternoon, it is the shorter road.
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` runs the tests, packages both architectures, attaches the two
-`.dmg`s and their `.sha256` files to the GitHub release, and writes the Gatekeeper instructions into
-the release notes. `workflow_dispatch` does the same on demand for a tag that already exists.
+Both CI systems are wired for it, and both call the **same** `tools/package-dmg.sh` — two CI files
+that each spell out the packaging drift, and the one nobody watches is the one that breaks on
+release day.
+
+### GitHub Actions
+
+`.github/workflows/release.yml` runs the tests, packages both architectures on a matrix of
+`macos-14` and `macos-13`, attaches the two `.dmg`s and their `.sha256` files to the release, and
+writes the Gatekeeper instructions into the notes. `workflow_dispatch` does the same on demand for a
+tag that already exists.
+
+### GitLab CI
+
+`.gitlab-ci.yml` mirrors it, with three differences that are GitLab's rather than ours:
+
+- **Test results land in the merge request.** `artifacts:reports:junit` renders failures in the MR
+  itself instead of in a log nobody opens — the one thing GitLab does better here out of the box.
+- **A release links to assets, it does not host them.** The `.dmg`s are uploaded to the project's
+  generic package registry first, and the release entry links to them.
+- **The packaging job needs a macOS runner**, and on GitLab.com that is a paid tier. On the free
+  tier the job simply stays pending. Point the `.macos` tag at whatever your runner advertises —
+  `saas-macos-medium-m1` on GitLab.com, or your own tag for a self-hosted Mac.
+
+**If you have no macOS runner**, the fallback is honest and takes a minute:
+
+```bash
+git checkout v0.1.0
+./gradlew build && ./tools/package-dmg.sh 0.1.0
+# → build/release/Loupe-0.1.0-arm64.dmg (+ .sha256)
+```
+
+then upload it by hand to the release. That is one architecture only — an arm64 build will not
+launch on an Intel Mac — so either borrow an Intel machine or say in the notes which one it is.
+
+> The Linux build job is proven: the GitHub `ubuntu-latest` run gets all the way through the test
+> suite. The GitLab **release** job's syntax has never been executed, because there is no GitLab
+> project to run it against — treat that one as reviewed, not tested.
