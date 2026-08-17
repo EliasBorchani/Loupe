@@ -31,6 +31,28 @@ interface SourceAdapter {
     fun convert(source: File, destination: File): ConversionReport
 }
 
+/**
+ * An adapter that renders into [CanonicalLine], and therefore knows which profile reads its output.
+ *
+ * Split from [SourceAdapter] rather than added to it because the next two adapters are `.gz` and
+ * `.zip`, which emit whatever was inside the archive: no shape, no paired profile, ordinary
+ * detection. A nullable `shape` would put a `?.` on every use of a property that is either always
+ * there or never.
+ */
+interface CanonicalSourceAdapter : SourceAdapter {
+
+    /** The columns this adapter writes, from which the paired profile's regexes are derived. */
+    val shape: CanonicalLineShape
+
+    /**
+     * The bundled profile that reads this adapter's output.
+     *
+     * Named rather than detected: two adapter-emitted profiles scoring against each other is a race
+     * that used to be settled by hand-written `priority` values.
+     */
+    val emittedProfileName: String
+}
+
 /** What a conversion did, so it can be reported rather than silently assumed. */
 class ConversionReport(val entriesWritten: Long, val note: String)
 

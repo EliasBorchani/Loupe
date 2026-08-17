@@ -44,7 +44,19 @@ import java.time.format.DateTimeParseException
  * Any further scalar key is written to a continuation line, so it stays searchable rather than
  * being dropped. Nested objects and arrays have no column to live in and are skipped.
  */
-object JsonLinesAdapter : SourceAdapter {
+object JsonLinesAdapter : CanonicalSourceAdapter {
+
+    /** The one scale every producer's vocabulary is normalised onto. [LEVELS] maps into it. */
+    private val LEVEL_WORDS: List<String> = listOf("TRACE", "DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL")
+
+    private val LEVEL = CanonicalColumn.Vocabulary("level", LEVEL_WORDS)
+
+    private val CONTEXT = CanonicalColumn.Bracketed("context", mayContainBracket = false)
+
+    override val shape = CanonicalLineShape(listOf(LEVEL, CONTEXT))
+
+    override val emittedProfileName: String = "json-lines"
+
 
     private const val TIMESTAMP_WIDTH = 23
 

@@ -51,7 +51,22 @@ import java.time.format.DateTimeFormatter
  * `applicationId` and `processName` were identical on all 9 994 entries of that capture, so only
  * one is written, as `process`. Should they ever differ, the application id is the one kept.
  */
-object AndroidStudioLogcatAdapter : SourceAdapter {
+object AndroidStudioLogcatAdapter : CanonicalSourceAdapter {
+
+    private val PID = CanonicalColumn.Padded("pid", width = 5)
+    private val TID = CanonicalColumn.Padded("tid", width = 5)
+    private val LEVEL = CanonicalColumn.Code("level", alphabet = "VDIWEFA")
+
+    /** Tags hold brackets — `DisplayPowerController[0]`, `[GF_HAL][DelmarHalUtils]`. */
+    private val TAG = CanonicalColumn.Bracketed("tag", mayContainBracket = true)
+
+    /** An application id is a package name, so it can safely close the prefix. */
+    private val PROCESS = CanonicalColumn.Bracketed("process", mayContainBracket = false)
+
+    override val shape = CanonicalLineShape(listOf(PID, TID, LEVEL, TAG, PROCESS))
+
+    override val emittedProfileName: String = "android-studio-logcat"
+
 
     /** The timestamp width, and so the continuation indent the profile strips back off. */
     private const val TIMESTAMP_WIDTH = 23
